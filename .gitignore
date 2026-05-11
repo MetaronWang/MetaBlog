@@ -1,0 +1,17 @@
+./sample_latex/*
+.gocache/
+.gomodcache/
+.metablog-cache/
+
+# Generated site outputs and temporary conversion probes
+out/
+out_*/
+articles/*
+.latexml*/
+go.sum
+.*
+data/*
+release/*
+build_release.bat
+asset/*
+!.gitignore
