@@ -11,10 +11,24 @@ func TestHighlightPython(t *testing.T) {
 	if !strings.Contains(got, "chline") {
 		t.Fatalf("expected chroma line class in output: %s", got)
 	}
+	if !strings.Contains(got, `class="chk"`) {
+		t.Fatalf("expected keyword token class in output: %s", got)
+	}
 	if !strings.Contains(got, "hello") {
 		t.Fatalf("missing original code: %s", got)
 	}
 	// The pre/code wrapper must NOT be present.
+	if strings.Contains(got, "<pre") || strings.Contains(got, "</pre>") {
+		t.Fatalf("output should not contain chroma pre wrapper: %s", got)
+	}
+}
+
+func TestHighlightGoUsesLanguageNameLexer(t *testing.T) {
+	code := "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"
+	got := Highlight(code, "Go")
+	if !strings.Contains(got, `class="chkn"`) || !strings.Contains(got, `class="chkd"`) {
+		t.Fatalf("expected Go keyword token class in output: %s", got)
+	}
 	if strings.Contains(got, "<pre") || strings.Contains(got, "</pre>") {
 		t.Fatalf("output should not contain chroma pre wrapper: %s", got)
 	}

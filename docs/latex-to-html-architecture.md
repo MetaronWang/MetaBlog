@@ -235,6 +235,8 @@ metablog site serve -out out
 
 watch 模式下的增量编译经过 `source.Load` → `blocks.Lift` → LaTeXML 转换 → `parser.Parse` → `render.RenderWithOptions` 完整流程，与整站构建共用同一套构建函数和 LaTeXML 缓存。`LaTeXMLIdentity` 在 watch 启动时预热一次，所有后续重编译共享同一个 identity。
 
+watch 模式还会启用浏览器自动刷新。HTTP handler 会对 HTML 响应注入一个本地脚本，该脚本轮询 `__metablog_live_reload` 内部端点并携带当前 `location.pathname`。watch 重建成功后只标记实际更新的 HTML 路径版本：索引页重建时标记对应索引页，about 重建时标记 `about/index.html`，单篇文章重建时标记该文章页，站点配置强制重建时标记所有受影响页面。浏览器只有在当前路径版本变化时才刷新，因此其他文章更新不会打断当前页面预览。
+
 ### 5.4 `article build`
 
 单篇构建只编译一个 LaTeX 主文件，常用于调试解析器和文章渲染。
@@ -886,6 +888,8 @@ metablog site build -subset-fonts
 
 **与 HTTP 服务器的协调**：监听器在独立的 goroutine 中运行，与 HTTP 文件服务器共享同一个输出目录。重编译完成后，HTTP 服务器自动提供更新后的文件，无需重启。
 
+**浏览器自动刷新**：watch 模式下 HTTP handler 会包装静态文件服务，对 HTML 响应注入自动刷新脚本，并提供 `__metablog_live_reload` 版本查询端点。每次重建成功后，watchState 只递增受影响 HTML 路径的版本号；浏览器端脚本按当前 `location.pathname` 查询版本，只有当前页面版本变化时才调用 `location.reload()`。该机制同时支持普通磁盘输出和 `-only-ram` 内存输出。
+
 ### 23.2 纯内存模式（Only-RAM）
 
 `site serve -only-ram` 进一步将所有输出文件操作移入内存。
@@ -933,6 +937,7 @@ MetaBlog 尽量区分错误和 warning：
 | `internal/app/site_init.go` | 网站初始化，创建目录、写入内置模板、下载字体、检测环境。 |
 | `internal/app/site_serve.go` | 本地预览服务器，监听指定 host/port 并用静态文件服务器暴露输出目录。 |
 | `internal/app/serve_watch.go` | 文件监听和热重编译：轮询源目录修改时间，在文件变更时增量编译对应文档并更新输出。 |
+| `internal/app/live_reload.go` | watch 模式下的浏览器自动刷新：注入页面脚本、提供版本查询端点并跟踪已更新页面版本。 |
 | `internal/app/memstore.go` | 内存文件存储：提供 HTTP 文件服务、并发安全的读写接口，用于 `-only-ram` 模式。 |
 | `internal/app/article_cli.go` | `article init/edit/delete` 的交互式元数据维护。 |
 | `internal/app/cache.go` | `.metablog-cache/` 清理。 |

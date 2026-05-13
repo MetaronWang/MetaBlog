@@ -96,6 +96,93 @@ Original.
 	}
 }
 
+func TestRunSiteServeWatchInjectsLiveReloadAndBumpsChangedPage(t *testing.T) {
+	dir := t.TempDir()
+	aboutDir := filepath.Join(dir, "data", "about_page")
+	if err := os.MkdirAll(aboutDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(aboutDir, "main.tex"), []byte(`\begin{document}
+\section{Original}
+Original.
+\end{document}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := filepath.Join(dir, "out")
+	if err := RunSite(Config{RootDir: dir, OutDir: outDir, SiteConfig: "", ArticlesFile: "", NoAssets: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	var serveOut bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunSiteServe(SiteServeConfig{
+			OutDir: outDir, Host: "127.0.0.1", Out: &serveOut,
+			Listener: listener, Stop: stop,
+			Watch: true, RootDir: dir, NoAssets: true,
+		})
+	}()
+	baseURL := "http://" + listener.Addr().String()
+	waitForHTTP(t, baseURL+"/")
+
+	resp, err := http.Get(baseURL + "/about/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), liveReloadEndpoint) {
+		t.Fatalf("watch-served HTML did not contain live reload script:\n%s", string(body))
+	}
+
+	initialResp, err := http.Get(baseURL + liveReloadEndpoint + "?path=/about/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialVersionBytes, _ := io.ReadAll(initialResp.Body)
+	initialResp.Body.Close()
+	initialVersion := strings.TrimSpace(string(initialVersionBytes))
+
+	time.Sleep(100 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(aboutDir, "main.tex"), []byte(`\begin{document}
+\section{Modified}
+Modified live reload content.
+\end{document}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	var version string
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(baseURL + liveReloadEndpoint + "?path=/about/")
+		if err == nil {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			version = strings.TrimSpace(string(b))
+			if version != "" && version != initialVersion {
+				break
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if version == "" || version == initialVersion {
+		t.Fatalf("live reload version did not change for about page; initial=%q final=%q\nserver output:\n%s", initialVersion, version, serveOut.String())
+	}
+
+	close(stop)
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunSiteServeOnlyRAMArticleHTMLDoesNotTouchDisk(t *testing.T) {
 	dir := t.TempDir()
 	articleDir := filepath.Join(dir, "articles", "ram-html-article")

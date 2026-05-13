@@ -23,9 +23,10 @@ type watchState struct {
 	changes         chan string
 	rebuildRequest  chan struct{}
 	rebuildDebounce time.Duration
+	liveReload      *liveReloadState
 }
 
-func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}, store *memStore) {
+func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}, store *memStore, liveReload *liveReloadState) {
 	state := &watchState{
 		cfg:             cfg,
 		siteData:        siteData,
@@ -37,6 +38,7 @@ func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan st
 		changes:         make(chan string, 16),
 		rebuildRequest:  make(chan struct{}, 1),
 		rebuildDebounce: 300 * time.Millisecond,
+		liveReload:      liveReload,
 	}
 
 	cfg.logf("Watch: monitoring %d article(s) and about page for changes\n", len(siteData.Articles))
@@ -210,6 +212,7 @@ func (s *watchState) executeRebuild(pending []string) {
 		}
 		if indexOK {
 			s.cfg.logf("Watch: index pages regenerated\n")
+			s.markReloadPagesFromMap(pages)
 		}
 	}
 
@@ -262,6 +265,15 @@ func (s *watchState) rebuildSiteArticles(siteData *blog.Site, force bool) {
 	}
 	if _, err := buildSiteArticles(cfg, siteData); err != nil {
 		cfg.logf("Watch: rebuild article pages failed: %v\n", err)
+		return
+	}
+	if force {
+		for _, article := range siteData.Articles {
+			slug := blog.Slugify(article.Slug)
+			if slug != "" {
+				s.markReloadPages("articles/" + slug + "/index.html")
+			}
+		}
 	}
 }
 
@@ -294,6 +306,7 @@ func (s *watchState) rebuildAboutPage(siteData *blog.Site) {
 		}
 	}
 	s.cfg.logf("Watch: about page rebuilt (%d warning(s))\n", len(warnings))
+	s.markReloadPages("about/index.html")
 	s.cfg.flushDocumentLogString("about page", docLog.String())
 }
 
@@ -337,7 +350,25 @@ func (s *watchState) rebuildOneArticle(article blog.Article, siteData *blog.Site
 	}
 
 	s.cfg.logf("Watch: rebuilt %s (%d warning(s), source=%s)\n", article.Title, len(warnings), filepath.ToSlash(sourceDir))
+	s.markReloadPages("articles/" + slug + "/index.html")
 	s.cfg.flushDocumentLogString(article.Title, docLog.String())
+}
+
+func (s *watchState) markReloadPages(paths ...string) {
+	if s.liveReload != nil {
+		s.liveReload.MarkUpdated(paths...)
+	}
+}
+
+func (s *watchState) markReloadPagesFromMap(pages map[string]string) {
+	if s.liveReload == nil || len(pages) == 0 {
+		return
+	}
+	paths := make([]string, 0, len(pages))
+	for path := range pages {
+		paths = append(paths, path)
+	}
+	s.liveReload.MarkUpdated(paths...)
 }
 
 func sitePageKeys(siteData *blog.Site) map[string]struct{} {

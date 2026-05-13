@@ -21,7 +21,7 @@ const (
 // The language name is case-insensitive. Unrecognized languages fall back to plain text.
 // Returns only the inner highlighted content (no wrapping pre/code tags).
 func Highlight(code, language string) string {
-	lexer := lexers.Match(normalizeLanguage(language))
+	lexer := lexerForLanguage(language)
 	if lexer == nil {
 		lexer = lexers.Fallback
 	}
@@ -53,6 +53,24 @@ func Highlight(code, language string) string {
 	raw = strings.TrimPrefix(raw, `<pre class="`+CSSPrefix+`chroma"><code>`)
 	raw = strings.TrimSuffix(raw, `</code></pre>`)
 	return raw
+}
+
+func lexerForLanguage(language string) chroma.Lexer {
+	normalized := normalizeLanguage(language)
+	if normalized == "" {
+		return nil
+	}
+	if lexer := lexers.Get(normalized); lexer != nil {
+		return lexer
+	}
+	lower := strings.ToLower(normalized)
+	if lexer := lexers.Get(lower); lexer != nil {
+		return lexer
+	}
+	if lexer := lexers.Match(normalized); lexer != nil {
+		return lexer
+	}
+	return lexers.Match(lower)
 }
 
 // ThemeCSS returns the CSS rules for the current chroma theme, scoped with CSSPrefix.

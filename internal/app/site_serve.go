@@ -76,6 +76,16 @@ func RunSiteServe(cfg SiteServeConfig) error {
 	} else {
 		handler = http.FileServer(http.Dir(outDir))
 	}
+	var liveReload *liveReloadState
+	if cfg.Watch {
+		liveReload = newLiveReloadState()
+		handler = liveReloadHandler{
+			outDir: outDir,
+			store:  store,
+			base:   handler,
+			state:  liveReload,
+		}
+	}
 	server := &http.Server{Handler: handler}
 
 	stopCh := cfg.Stop
@@ -99,7 +109,7 @@ func RunSiteServe(cfg SiteServeConfig) error {
 		}
 		buildCfg.ensureLaTeXMLIdentity()
 		buildCfg.prepareLaTeXMLIdentity()
-		startWatcher(buildCfg, siteData, outDir, stopCh, store)
+		startWatcher(buildCfg, siteData, outDir, stopCh, store, liveReload)
 	}
 
 	cfg.logf("Serving %s\n", filepath.ToSlash(outDir))
