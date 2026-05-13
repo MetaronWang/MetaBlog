@@ -57,6 +57,9 @@ func RenderWithOptions(doc *ast.Document, opts Options) string {
 	b.WriteString("\">\n<link rel=\"stylesheet\" href=\"")
 	b.WriteString(html.EscapeString(joinURL(opts.AssetPrefix, "static/style.css")))
 	b.WriteString("\">\n")
+	b.WriteString("\n<link rel=\"stylesheet\" href=\"")
+	b.WriteString(html.EscapeString(joinURL(opts.AssetPrefix, "static/chroma-theme.css")))
+	b.WriteString("\">\n")
 	if opts.IconHref != "" {
 		b.WriteString(`<link rel="icon" href="`)
 		b.WriteString(html.EscapeString(joinURL(opts.AssetPrefix, opts.IconHref)))
@@ -113,6 +116,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	r.renderBlocks(&b, doc.Children)
 	b.WriteString("</article></main>\n")
 	b.WriteString(tocToggleScript())
+	b.WriteString(codeBlockScript())
 	b.WriteString("</body>\n</html>\n")
 	return b.String()
 }
@@ -586,17 +590,7 @@ func (r *Renderer) renderBlocks(b *strings.Builder, blocks []ast.Block) {
 			r.renderBlocks(b, n.Children)
 			b.WriteString(`</div></details>`)
 		case *ast.CodeBlock:
-			b.WriteString(`<div class="code-block code-block-`)
-			b.WriteString(html.EscapeString(n.EnvName))
-			b.WriteString(`">`)
-			if n.Language != "" {
-				b.WriteString(`<div class="code-block-title">`)
-				b.WriteString(html.EscapeString(n.Language))
-				b.WriteString(`</div>`)
-			}
-			b.WriteString(`<pre><code>`)
-			b.WriteString(html.EscapeString(n.Text))
-			b.WriteString(`</code></pre></div>`)
+			r.renderCodeBlock(b, n)
 		case *ast.ComplexHTML:
 			if n.Number != "" {
 				b.WriteString(`<section id="`)

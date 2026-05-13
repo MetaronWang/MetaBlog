@@ -42,3 +42,32 @@ func TestWriteStaticWithSubsetFontsDoesNotCopyOriginalFontsCSS(t *testing.T) {
 		t.Fatalf("subset mode copied original font file, err=%v", err)
 	}
 }
+
+func TestDefaultCodeBlockCSSPreservesWhitespaceAndWrapMode(t *testing.T) {
+	for _, want := range []string{
+		`font-family: "Source Code Pro"`,
+		`.code-block-line-code`,
+		`white-space: pre;`,
+		`.code-block[data-wrap="true"] .code-block-line-code`,
+		`white-space: pre-wrap;`,
+		`overflow-wrap: anywhere;`,
+		`.code-block-source`,
+		`display: none;`,
+	} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Fatalf("default CSS missing %q", want)
+		}
+	}
+}
+
+func TestDefaultFontsCSSIncludesSourceCodePro(t *testing.T) {
+	for _, want := range []string{
+		`font-family: "Source Code Pro"`,
+		`source-code-pro-regular.woff2`,
+		`source-code-pro-bold.woff2`,
+	} {
+		if !strings.Contains(defaultFontsCSS, want) {
+			t.Fatalf("default fonts CSS missing %q", want)
+		}
+	}
+}

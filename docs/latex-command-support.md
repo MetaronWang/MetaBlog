@@ -268,24 +268,57 @@ keyword 1, keyword 2
 ### 8.2 `lstlisting`
 
 ```latex
-\begin{lstlisting}
+\begin{lstlisting}[language=Go]
 fmt.Println("hello")
 \end{lstlisting}
 ```
 
-当前按普通代码文本框渲染，不做语法高亮。
+渲染为带语法高亮的代码框。
+
+可选参数使用 `[...]` 传入。当前只读取 `language`，其他参数会被忽略：
+
+```latex
+\begin{lstlisting}[frame=single,language=Python,numbers=left]
+print("hello")
+\end{lstlisting}
+```
+
+`language` 大小写不敏感，并会用于标题栏显示和语法高亮。未提供 `language` 时按普通文本代码块处理。
 
 ### 8.3 `minted`
 
 ```latex
-\begin{minted}{go}
+\begin{minted}[]{go}
 fmt.Println("hello")
 \end{minted}
 ```
 
-当前按普通代码文本框渲染。必选语言参数会作为代码块语言信息显示。
+渲染为带语法高亮的代码框。
 
-### 8.4 `\verb`
+`minted` 的语言类型来自必选参数 `{...}`。`[...]` 中的所有可选参数都会被忽略：
+
+```latex
+\begin{minted}[linenos,breaklines]{python}
+print("hello")
+\end{minted}
+```
+
+语言名称大小写不敏感，并会用于标题栏显示和语法高亮。未能识别语言时，会降级为普通文本高亮。
+
+### 8.4 代码框交互和样式
+
+`verbatim`、`lstlisting` 和 `minted` 都会渲染为统一的代码框。代码框包含：
+
+1. 左侧贯穿标题栏和正文区域的竖线。
+2. 标题栏左侧的语言名称，使用黑体显示。
+3. 标题栏右侧的自动换行、复制、折叠按钮。
+4. 正文区域的行号和代码内容。
+
+代码框使用 Source Code Pro 作为首选等宽字体。构建站点时会输出 Chroma 语法高亮样式文件 `static/chroma-theme.css`；`site init` 会同时生成该样式文件，并下载 Source Code Pro 字体文件到 `web/static/fonts/`。
+
+自动换行默认关闭。关闭时，长行通过横向滚动查看；开启后，同一源码行仍保持一个行号，过长内容在视觉上换到下一行并带有缩进。复制按钮复制的是原始代码文本，而不是页面中带行号或高亮标签的可见文本。
+
+### 8.5 `\verb`
 
 `\verb` 内容作为原样 inline 片段保护，不会参与注释和 input/include 解析。
 

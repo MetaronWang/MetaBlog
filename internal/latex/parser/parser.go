@@ -895,6 +895,27 @@ func parseCodeBlock(raw, env string) ast.Block {
 			}
 		}
 	}
+	if env == "lstlisting" {
+		// readBeginAt already consumed \begin{lstlisting}[...], setting start
+		// past the optional args. Look for [...] between \begin{lstlisting} and start.
+		beginIdx := strings.Index(raw, `\begin{lstlisting}`)
+		if beginIdx >= 0 {
+			j := beginIdx + len(`\begin{lstlisting}`)
+			j = skipWhitespace(raw, j)
+			if j < len(raw) && raw[j] == '{' {
+				if _, end, ok := readBalanced(raw, j, '{', '}'); ok {
+					j = end
+				}
+			}
+			if j < len(raw) && raw[j] == '[' {
+				opts, end, ok := readBalanced(raw, j, '[', ']')
+				if ok {
+					language = extractListingsOption(opts, "language")
+					start = end
+				}
+			}
+		}
+	}
 	endStart, _, ok := findEnvironmentClose(raw, 0, env)
 	if !ok || endStart < start {
 		return &ast.CodeBlock{EnvName: env, Language: language, Text: strings.Trim(raw[start:], "\r\n")}
@@ -904,6 +925,23 @@ func parseCodeBlock(raw, env string) ast.Block {
 		Language: language,
 		Text:     strings.Trim(raw[start:endStart], "\r\n"),
 	}
+}
+
+func extractListingsOption(opts, key string) string {
+	for _, part := range splitTopLevel(opts, ',') {
+		k, v, ok := cutTopLevel(part, '=')
+		if !ok || !strings.EqualFold(strings.TrimSpace(k), key) {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if strings.HasPrefix(v, "{") {
+			if unwrapped, end, ok := readBalanced(v, 0, '{', '}'); ok && strings.TrimSpace(v[end:]) == "" {
+				return strings.TrimSpace(unwrapped)
+			}
+		}
+		return v
+	}
+	return ""
 }
 
 func lightenLaTeXColor(raw, fallback string, amount float64) string {

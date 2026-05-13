@@ -8,7 +8,6 @@ out/
 out_*/
 articles/*
 .latexml*/
-go.sum
 .*
 data/*
 release/*

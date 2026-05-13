@@ -1043,3 +1043,144 @@ func inlineText(in ast.Inline) string {
 		return ""
 	}
 }
+
+func TestParseLstlistingLanguageFromOptionalArgs(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{`\begin{lstlisting}[language=C]
+int main() { return 0; }
+\end{lstlisting}`, "C"},
+		{`\begin{lstlisting}[language=Python]
+print("hello")
+\end{lstlisting}`, "Python"},
+		{`\begin{lstlisting}[language={C++}]
+#include <iostream>
+\end{lstlisting}`, "C++"},
+		{`\begin{lstlisting}[language=go,other=ignored]
+package main
+\end{lstlisting}`, "go"},
+		{`\begin{lstlisting}[other=ignored,language=Rust]
+fn main() {}
+\end{lstlisting}`, "Rust"},
+		{`\begin{lstlisting}[frame,language=Go,numbers=left]
+package main
+\end{lstlisting}`, "Go"},
+		{`\begin{lstlisting} [language=JavaScript]
+console.log("x")
+\end{lstlisting}`, "JavaScript"},
+		{`\begin{lstlisting}[language = bash]
+echo hello
+\end{lstlisting}`, "bash"},
+		{`\begin{lstlisting}[LANGUAGE=Python]
+x = 1
+\end{lstlisting}`, "Python"},
+		{`\begin{lstlisting}[]
+no language
+\end{lstlisting}`, ""},
+		{`\begin{lstlisting}
+no args at all
+\end{lstlisting}`, ""},
+	}
+	for _, tt := range tests {
+		got, _ := Parse(tt.raw, nil, "test.tex", ".")
+		if got == nil {
+			t.Errorf("Parse returned nil for %q", tt.raw)
+			continue
+		}
+		var lang string
+		for _, block := range got.Children {
+			if cb, ok := block.(*ast.CodeBlock); ok {
+				lang = cb.Language
+				break
+			}
+		}
+		if lang != tt.want {
+			t.Errorf("language = %q, want %q for raw: %s", lang, tt.want, tt.raw)
+		}
+	}
+}
+
+func TestParseLstlistingWhitespaceBeforeOptionalArgsDoesNotLeakOptions(t *testing.T) {
+	doc, err := Parse(`\begin{lstlisting} [language=JavaScript]
+console.log("x")
+\end{lstlisting}`, nil, "test.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one block, got %#v", doc.Children)
+	}
+	cb, ok := doc.Children[0].(*ast.CodeBlock)
+	if !ok {
+		t.Fatalf("expected code block, got %#v", doc.Children[0])
+	}
+	if cb.Language != "JavaScript" {
+		t.Fatalf("language = %q", cb.Language)
+	}
+	if strings.Contains(cb.Text, "language=JavaScript") {
+		t.Fatalf("optional args leaked into code text: %q", cb.Text)
+	}
+	if !strings.Contains(cb.Text, `console.log("x")`) {
+		t.Fatalf("code text missing source line: %q", cb.Text)
+	}
+}
+
+func TestParseMintedLanguageFromRequiredArgs(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{`\begin{minted}{python}
+print("hello")
+\end{minted}`, "python"},
+		{`\begin{minted}[]{c}
+int main() {}
+\end{minted}`, "c"},
+		{`\begin{minted}[ignore=this]{go}
+package main
+\end{minted}`, "go"},
+		{`\begin{minted}{Rust}
+fn main() {}
+\end{minted}`, "Rust"},
+	}
+	for _, tt := range tests {
+		got, _ := Parse(tt.raw, nil, "test.tex", ".")
+		if got == nil {
+			t.Errorf("Parse returned nil for %q", tt.raw)
+			continue
+		}
+		var lang string
+		for _, block := range got.Children {
+			if cb, ok := block.(*ast.CodeBlock); ok {
+				lang = cb.Language
+				break
+			}
+		}
+		if lang != tt.want {
+			t.Errorf("language = %q, want %q for raw: %s", lang, tt.want, tt.raw)
+		}
+	}
+}
+
+func TestExtractListingsOptionEdgeCases(t *testing.T) {
+	tests := []struct{ opts, key, want string }{
+		{"language=C", "language", "C"},
+		{"language=C++", "language", "C++"},
+		{"language={C, C++}", "language", "C, C++"},
+		{"other=ignored,language=Python", "language", "Python"},
+		{"frame,language=Go,numbers=left", "language", "Go"},
+		{"language = go", "language", "go"},
+		{"x=y,language=Rust,z=w", "language", "Rust"},
+		{"", "language", ""},
+		{"x=y", "language", ""},
+		{"language", "language", ""},
+	}
+	for _, tt := range tests {
+		got := extractListingsOption(tt.opts, tt.key)
+		if got != tt.want {
+			t.Errorf("extractListingsOption(%q, %q) = %q, want %q", tt.opts, tt.key, got, tt.want)
+		}
+	}
+}

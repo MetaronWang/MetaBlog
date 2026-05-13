@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"MetaBlog/internal/highlight"
 	"MetaBlog/internal/latexml"
 )
 
@@ -42,6 +43,8 @@ var defaultSiteFontDownloads = []FontDownload{
 	{Name: "SourceHanSerifSC-Regular.otf", URL: "https://raw.githubusercontent.com/adobe-fonts/source-han-serif/release/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf"},
 	{Name: "SourceHanSansSC-Regular.otf", URL: "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf"},
 	{Name: "SourceHanSansSC-Bold.otf", URL: "https://raw.githubusercontent.com/adobe-fonts/source-han-sans/release/OTF/SimplifiedChinese/SourceHanSansSC-Bold.otf"},
+	{Name: "source-code-pro-regular.woff2", URL: "https://cdn.jsdelivr.net/npm/@fontsource/source-code-pro@5.0.18/files/source-code-pro-latin-400-normal.woff2"},
+	{Name: "source-code-pro-bold.woff2", URL: "https://cdn.jsdelivr.net/npm/@fontsource/source-code-pro@5.0.18/files/source-code-pro-latin-700-normal.woff2"},
 }
 
 func RunSiteInit(cfg SiteInitConfig) error {
@@ -72,6 +75,7 @@ func RunSiteInit(cfg SiteInitConfig) error {
 		{Path: "data/about_page/main.tex", Content: defaultAboutTex},
 		{Path: "asset/figs/circle_example.svg", Content: defaultCircleExampleSVG},
 		{Path: "web/static/fonts.css", Content: defaultInitFontsCSS},
+		{Path: "web/static/chroma-theme.css", Content: highlight.ThemeCSS()},
 	}
 	for _, file := range files {
 		if err := writeInitFile(root, file, cfg.Out); err != nil {
@@ -457,6 +461,22 @@ const defaultInitFontsCSS = `@font-face {
 @font-face {
   font-family: "Source Han Sans SC";
   src: url("fonts/SourceHanSansSC-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/source-code-pro-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/source-code-pro-bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;

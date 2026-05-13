@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"MetaBlog/internal/highlight"
 )
 
 type StaticOptions struct {
@@ -45,6 +47,12 @@ func WriteStaticWithOptions(outDir string, warnings []string, opts StaticOptions
 		}
 	} else if err := ensureFontsCSS(fontsCSSPath); err != nil {
 		return err
+	}
+	chromaCSSPath := filepath.Join(outDir, "static", "chroma-theme.css")
+	if _, err := os.Stat(chromaCSSPath); os.IsNotExist(err) {
+		if err := os.WriteFile(chromaCSSPath, []byte(highlight.ThemeCSS()), 0644); err != nil {
+			return err
+		}
 	}
 	if err := os.WriteFile(filepath.Join(outDir, "static", "style.css"), []byte(defaultCSS), 0644); err != nil {
 		return err
@@ -148,6 +156,22 @@ const defaultFontsCSS = `/*
 Place project-supplied web fonts and their @font-face rules here.
 This file is copied from web/static/fonts.css when present.
 */
+
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/source-code-pro-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/source-code-pro-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 `
 
 const defaultCSS = `:root {
@@ -1246,29 +1270,87 @@ pre {
 }
 .code-block {
   margin: 18px 0;
+  border-left: 5px solid var(--tcb-border, #75715e);
+  background: #272822;
+  border-radius: 0;
 }
-.code-block-title {
-  border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 6px 10px;
-  background: #e9eef5;
-  color: var(--muted);
+  background: rgba(0,0,0,0.18);
+}
+.code-block-lang {
+  font-weight: 700;
+  color: #a6e22e;
   font-family: "HarmonyOS Sans", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", Arial, sans-serif;
-  font-size: 0.86rem;
-  font-weight: 650;
+  font-size: 0.85rem;
 }
-.code-block pre {
-  margin: 0;
+.code-block-actions {
+  display: flex;
+  gap: 2px;
 }
-.code-block-title + pre {
-  border-radius: 0 0 6px 6px;
+.code-block-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #75715e;
+  cursor: pointer;
 }
-.code-block code {
-  font-family: Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.92rem;
-  line-height: 1.5;
+.code-block-btn:hover {
+  color: #f8f8f2;
+  background: rgba(255,255,255,0.08);
+}
+.code-block-body {
+  overflow-x: auto;
+}
+.code-block[data-wrap="true"] .code-block-body {
+  overflow-x: hidden;
+}
+.code-block-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Source Code Pro", "Cascadia Code", "Fira Code", Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #f8f8f2;
+}
+.code-block-row {
+  vertical-align: top;
+}
+.code-block-line-no {
+  width: 48px;
+  min-width: 48px;
+  text-align: right;
+  padding: 0 12px 0 8px;
+  color: #75715e;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.code-block-line-code {
+  padding: 0 12px 0 0;
   white-space: pre;
+}
+.code-block-source {
+  display: none;
+}
+.code-block[data-wrap="true"] .code-block-line-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 24px;
+  text-indent: -20px;
+}
+.code-block-collapsed .code-block-body {
+  display: none;
+}
+.code-block-collapsed .code-block-collapse-btn svg {
+  transform: rotate(180deg);
 }
 .footnote {
   position: relative;

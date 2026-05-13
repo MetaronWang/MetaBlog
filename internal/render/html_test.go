@@ -149,9 +149,9 @@ func TestRenderCodeBlock(t *testing.T) {
 
 	got := Render(doc)
 	for _, want := range []string{
-		`<div class="code-block code-block-minted">`,
-		`<div class="code-block-title">go</div>`,
-		`<pre><code>fmt.Println(&#34;100%&#34;)</code></pre>`,
+		`<div class="code-block chchroma" data-wrap="false">`,
+		`<span class="code-block-lang">go</span>`,
+		`Println`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rendered code block missing %q in:\n%s", want, got)
