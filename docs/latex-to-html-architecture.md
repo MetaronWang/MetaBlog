@@ -213,6 +213,23 @@ metablog site serve -out out
 | `-out` | 要预览的静态网站输出目录，默认 `out`。 |
 | `-host` | 监听地址，默认 `127.0.0.1`。 |
 | `-port` | 监听端口，默认 `0`，表示随机空闲端口。 |
+| `-watch` | 启用文件监听和热重编译。 |
+| `-root` | 项目根目录，watch 模式需要此参数。 |
+| `-config` | 站点配置文件，watch 模式使用。 |
+| `-articles` | 文章元数据文件，watch 模式使用。 |
+| `-latexml-bin` | `latexmlc` 路径，watch 模式使用。 |
+| `-article-workers` | watch 模式下并行文章编译数。 |
+| `-latexml-workers` | watch 模式下并行 LaTeXML 转换数。 |
+| `-no-assets` | watch 模式下跳过资源处理。 |
+
+启用 `-watch` 后，serve 在启动 HTTP 服务器之外还会启动文件监听器。监听器以每秒一次的频率轮询所有已注册文章源目录、关于页面目录和站点配置文件。当检测到文件修改时，使用 300ms 去抖动后仅重编译受影响的部分（启用 LaTeXML 缓存）：
+
+1. **文章源文件修改**：仅重编译该文章的 HTML，输出到原位置替换原文件。
+2. **关于页面修改**：重编译关于页面 HTML。
+3. **站点配置修改**：重新加载配置，更新站点资源，重新生成所有索引页面，并强制重编译关于页面和所有文章页，避免 header、logo、icon 等站点级信息在旧页面中滞留。
+4. **文章元数据修改**：重新加载文章列表，重新生成所有索引页面，并检查所有已注册文章页；缺失或源文件更新过的文章会被增量编译。
+
+watch 模式下的增量编译经过 `source.Load` → `blocks.Lift` → LaTeXML 转换 → `parser.Parse` → `render.RenderWithOptions` 完整流程，与整站构建共用同一套构建函数和 LaTeXML 缓存。`LaTeXMLIdentity` 在 watch 启动时预热一次，所有后续重编译共享同一个 identity。
 
 ### 5.4 `article build`
 
@@ -813,6 +830,30 @@ metablog site build -subset-fonts
 
 这样可以避免并发构建时多篇文章日志交错。
 
+### 23.1 文件监听（Watch 模式）
+
+`site serve -watch` 启动后会运行一个轻量级文件监听器，实现源码修改时自动增量编译。
+
+**轮询机制**：使用 `time.Ticker` 每秒扫描一次所有被监听目录的最晚文件修改时间。服务启动时立即执行一次基线扫描，记录各目录的当前状态。后续每次轮询将当前最晚修改时间与上次记录的时间比较，发现更新时触发重编译。
+
+**去抖动**：使用 300ms 去抖定时器。在去抖窗口内收到的多个变更请求会被合并为一次批量重编译，避免编辑器连续保存时频繁触发构建。
+
+**监听范围**：
+- 每篇文章的源目录（来自 `data/articles.toml` 的 `folder` 字段）
+- 关于页面目录 `data/about_page/`
+- 站点配置文件 `data/config.toml`
+- 文章元数据文件 `data/articles.toml`
+
+**增量编译策略**：
+- 文章源文件变更：仅重编译该文章的 HTML
+- 关于页面源文件变更：重编译关于页面
+- 配置变更：重新加载站点数据，更新站点资源，重新生成所有索引页面，并强制重编译关于页面和所有文章页
+- 元数据变更：重新加载站点数据，重新生成所有索引页面，并检查已注册文章页，构建缺失或过期的文章输出
+
+重编译使用与整站构建相同的 `buildArticle` / `buildOneSiteArticle` / `writeSitePages` 函数，共享同一个 `LaTeXMLIdentity` 和缓存目录。`NoAssets` 选项在 watch 模式下可跳过资源复制以加快编译速度。
+
+**与 HTTP 服务器的协调**：监听器在独立的 goroutine 中运行，与 HTTP 文件服务器共享同一个输出目录。重编译完成后，HTTP 服务器自动提供更新后的文件，无需重启。
+
 ## 24. Warning 和错误策略
 
 MetaBlog 尽量区分错误和 warning：
@@ -840,6 +881,7 @@ MetaBlog 尽量区分错误和 warning：
 | `internal/app/site.go` | 整站构建，加载站点数据，构建 about 和文章，写站点页面和静态资源。 |
 | `internal/app/site_init.go` | 网站初始化，创建目录、写入内置模板、下载字体、检测环境。 |
 | `internal/app/site_serve.go` | 本地预览服务器，监听指定 host/port 并用静态文件服务器暴露输出目录。 |
+| `internal/app/serve_watch.go` | 文件监听和热重编译：轮询源目录修改时间，在文件变更时增量编译对应文档并更新输出。 |
 | `internal/app/article_cli.go` | `article init/edit/delete` 的交互式元数据维护。 |
 | `internal/app/cache.go` | `.metablog-cache/` 清理。 |
 

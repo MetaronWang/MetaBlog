@@ -87,6 +87,14 @@ func runSiteCommand(name string, args []string) error {
 		fs.StringVar(&cfg.OutDir, "out", "out", "static site output directory")
 		fs.StringVar(&cfg.Host, "host", "127.0.0.1", "host address to listen on")
 		fs.IntVar(&cfg.Port, "port", 0, "port to listen on; 0 chooses a random free port")
+		fs.BoolVar(&cfg.Watch, "watch", false, "watch source files and hot-rebuild changed articles")
+		fs.StringVar(&cfg.RootDir, "root", ".", "project root directory (required for -watch)")
+		fs.StringVar(&cfg.SiteConfig, "config", "data/config.toml", "site config TOML (for -watch)")
+		fs.StringVar(&cfg.ArticlesFile, "articles", "data/articles.toml", "article metadata TOML (for -watch)")
+		fs.StringVar(&cfg.LaTeXMLBin, "latexml-bin", "", "latexmlc executable path (for -watch)")
+		fs.IntVar(&cfg.ArticleWorkers, "article-workers", 0, "parallel article workers (for -watch); 0=auto")
+		fs.IntVar(&cfg.LaTeXMLWorkers, "latexml-workers", 0, "parallel LaTeXML workers (for -watch); 0=auto")
+		fs.BoolVar(&cfg.NoAssets, "no-assets", false, "skip asset conversion during watch rebuild")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}

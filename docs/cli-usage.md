@@ -89,6 +89,56 @@ URL: http://127.0.0.1:51324/
 Press Ctrl+C to stop.
 ```
 
+### 文件监听和热重编译（Watch 模式）
+
+启用 `-watch` 后，`site serve` 在启动 HTTP 服务器之外，还会持续监听已注册文章的源目录、关于页面和站点配置文件的变化。当监测到文件修改时，自动对变更部分执行增量编译（启用 LaTeXML 缓存），无需手动重新构建：
+
+```bash
+metablog site serve -out out -watch -root .
+```
+
+Watch 模式参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `-watch` | `false` | 启用文件监听和热重编译。 |
+| `-root` | `.` | 项目根目录；watch 模式需要此参数来定位文章源文件和配置。 |
+| `-config` | `data/config.toml` | 站点配置文件（用于 watch 模式）。 |
+| `-articles` | `data/articles.toml` | 文章元数据配置文件（用于 watch 模式）。 |
+| `-latexml-bin` | 空 | `latexmlc` 可执行文件路径（用于 watch 模式）。 |
+| `-article-workers` | `0` | watch 模式下的并行文章编译数；0=自动。 |
+| `-latexml-workers` | `0` | watch 模式下的并行 LaTeXML 转换数；0=自动。 |
+| `-no-assets` | `false` | watch 模式下跳过资源复制和 PDF 转 SVG。 |
+
+监听范围：
+
+1. **文章源目录**：`data/articles.toml` 中每篇文章的 `folder` 目录，源文件修改时仅重编译该文章的 HTML。
+2. **关于页面**：`data/about_page/` 目录，修改时重编译关于页面。
+3. **站点配置**：`data/config.toml`，修改时更新站点资源，重新生成所有索引页面，并强制重编译关于页面和所有文章页，确保 header、logo、icon 等站点级信息一致。
+4. **文章元数据**：`data/articles.toml`，修改时重新加载文章列表、重新生成所有索引页面，并检查所有已注册文章页；缺失或源文件更新过的文章会被增量编译。
+
+检测机制为每秒轮询源目录中最晚文件修改时间，并使用 300ms 去抖动避免编辑过程中频繁编译。
+
+示例：
+
+```bash
+# 构建后启动 watch 模式预览
+metablog site build -root . -out out && metablog site serve -out out -watch -root .
+
+# 跳过资源处理以加快重编译速度
+metablog site serve -out out -watch -root . -no-assets
+```
+
+启动后日志会显示监听的文章数量和重编译摘要：
+
+```text
+Serving /path/to/site/out
+URL: http://127.0.0.1:51324/
+Watch: monitoring 3 article(s) and about page for changes
+Press Ctrl+C to stop.
+Watch: rebuilt My Article (0 warning(s), source=articles/my-article/)
+```
+
 ## 初始化网站目录
 
 ```bash

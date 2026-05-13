@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"MetaBlog/internal/blog"
 )
 
 type SiteServeConfig struct {
@@ -20,6 +22,16 @@ type SiteServeConfig struct {
 	Out      io.Writer
 	Listener net.Listener
 	Stop     <-chan struct{}
+
+	// Watch mode: monitor source files and hot-rebuild changed articles.
+	Watch          bool
+	RootDir        string
+	SiteConfig     string
+	ArticlesFile   string
+	LaTeXMLBin     string
+	ArticleWorkers int
+	LaTeXMLWorkers int
+	NoAssets       bool
 }
 
 func RunSiteServe(cfg SiteServeConfig) error {
@@ -47,13 +59,29 @@ func RunSiteServe(cfg SiteServeConfig) error {
 	server := &http.Server{
 		Handler: http.FileServer(http.Dir(outDir)),
 	}
-	if cfg.Stop != nil {
+
+	stopCh := cfg.Stop
+	if stopCh == nil && cfg.Watch {
+		stopCh = make(chan struct{})
+	}
+
+	if stopCh != nil {
 		go func() {
-			<-cfg.Stop
+			<-stopCh
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			_ = server.Shutdown(ctx)
 		}()
+	}
+
+	if cfg.Watch {
+		siteData, buildCfg, err := loadSiteForWatch(cfg, outDir)
+		if err != nil {
+			return fmt.Errorf("watch: load site data: %w", err)
+		}
+		buildCfg.ensureLaTeXMLIdentity()
+		buildCfg.prepareLaTeXMLIdentity()
+		startWatcher(buildCfg, siteData, outDir, stopCh)
 	}
 
 	cfg.logf("Serving %s\n", filepath.ToSlash(outDir))
@@ -64,6 +92,44 @@ func RunSiteServe(cfg SiteServeConfig) error {
 		return nil
 	}
 	return err
+}
+
+func loadSiteForWatch(cfg SiteServeConfig, outDir string) (*blog.Site, Config, error) {
+	rootDir := cfg.RootDir
+	if rootDir == "" {
+		rootDir = "."
+	}
+	rootDir, err := filepath.Abs(rootDir)
+	if err != nil {
+		return nil, Config{}, err
+	}
+	siteData, err := loadPreparedSiteForWatch(rootDir, outDir, cfg.SiteConfig, cfg.ArticlesFile)
+	if err != nil {
+		return nil, Config{}, err
+	}
+	buildCfg := Config{
+		RootDir:        rootDir,
+		SiteConfig:     cfg.SiteConfig,
+		ArticlesFile:   cfg.ArticlesFile,
+		OutDir:         outDir,
+		LaTeXMLBin:     cfg.LaTeXMLBin,
+		ArticleWorkers: cfg.ArticleWorkers,
+		LaTeXMLWorkers: cfg.LaTeXMLWorkers,
+		NoAssets:       cfg.NoAssets,
+		Log:            cfg.Out,
+	}
+	return siteData, buildCfg, nil
+}
+
+func loadPreparedSiteForWatch(rootDir, outDir, siteConfig, articlesFile string) (*blog.Site, error) {
+	siteData, err := blog.Load(rootDir, siteConfig, articlesFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := prepareSiteAssets(rootDir, outDir, &siteData.Config); err != nil {
+		return nil, err
+	}
+	return siteData, nil
 }
 
 func normalizeSiteServeConfig(cfg SiteServeConfig) SiteServeConfig {
