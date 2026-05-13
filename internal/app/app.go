@@ -43,6 +43,8 @@ type Config struct {
 	Log             io.Writer
 	LogMu           *sync.Mutex
 	LaTeXMLIdentity *latexml.CacheIdentity
+	MemStore        *memStore           // in-memory output store for -only-ram serve mode
+	CacheStore      *latexml.CacheStore // in-memory LaTeXML read cache for -only-ram serve mode
 }
 
 func Run(cfg Config) error {
@@ -124,14 +126,15 @@ func buildArticle(cfg Config, input, outDir, assetSubdir, linkPrefix string, opt
 	logWriter, logMu := cfg.logging()
 	lateXMLStats := &latexml.CacheStats{}
 	runner := latexml.Runner{
-		Bin:      cfg.LaTeXMLBin,
-		CacheDir: lateXMLCacheDir(cfg),
-		KeepTemp: cfg.KeepTemp,
-		Identity: cfg.LaTeXMLIdentity,
-		Warnings: &warnings,
-		Log:      logWriter,
-		LogMu:    logMu,
-		Stats:    lateXMLStats,
+		Bin:        cfg.LaTeXMLBin,
+		CacheDir:   lateXMLCacheDir(cfg),
+		KeepTemp:   cfg.KeepTemp,
+		Identity:   cfg.LaTeXMLIdentity,
+		Warnings:   &warnings,
+		Log:        logWriter,
+		LogMu:      logMu,
+		Stats:      lateXMLStats,
+		CacheStore: cfg.CacheStore,
 	}
 	phaseStarted = time.Now()
 	if err := convertComplexBlocks(runner, lifted.Blocks, cfg.LaTeXMLWorkers); err != nil {
@@ -167,6 +170,9 @@ func buildArticle(cfg Config, input, outDir, assetSubdir, linkPrefix string, opt
 		Log:         logWriter,
 		LogMu:       logMu,
 		Stats:       assetStats,
+	}
+	if cfg.MemStore != nil {
+		converter.MemoryStore = cfg.MemStore
 	}
 	if cfg.NoAssets {
 		cfg.logf("Assets skipped by -no-assets\n")

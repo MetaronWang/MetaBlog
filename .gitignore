@@ -15,3 +15,4 @@ release/*
 build_release.bat
 asset/*
 !.gitignore
+CLAUDE.md

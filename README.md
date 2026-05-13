@@ -219,6 +219,16 @@ metablog site serve -out out -watch -root .
 
 修改文章源文件、关于页面或配置文件后，服务器会自动重编译受影响的 HTML，浏览器刷新即可看到更新。完整参数见 [CLI 使用文档](docs/cli-usage.md#文件监听和热重编译watch-模式)。
 
+#### 纯内存模式（Only-RAM）
+
+启用 `-only-ram` 将所有输出操作移入内存，避免频繁写入硬盘：
+
+```bash
+metablog site serve -out out -watch -root . -only-ram
+```
+
+页面和资源更新仅写入内存映射，LaTeXML 缓存仍落盘但自动启用有界内存读缓存。详见 [CLI 使用文档](docs/cli-usage.md#纯内存模式only-ram)。
+
 ### 构建单篇 LaTeX 文档
 
 ```bash

@@ -20,15 +20,70 @@ import (
 )
 
 type Runner struct {
-	Bin       string
-	CacheDir  string
-	KeepTemp  bool
-	Identity  *CacheIdentity
-	Warnings  *[]string
-	WarningMu *sync.Mutex
-	Log       io.Writer
-	LogMu     *sync.Mutex
-	Stats     *CacheStats
+	Bin        string
+	CacheDir   string
+	KeepTemp   bool
+	Identity   *CacheIdentity
+	Warnings   *[]string
+	WarningMu  *sync.Mutex
+	Log        io.Writer
+	LogMu      *sync.Mutex
+	Stats      *CacheStats
+	CacheStore *CacheStore
+}
+
+// CacheStore provides an optional bounded in-memory read-through cache for LaTeXML disk cache entries.
+type CacheStore struct {
+	mu         sync.RWMutex
+	data       map[string]cacheEntry
+	order      []string
+	maxEntries int
+}
+
+func NewCacheStore(maxEntries int) *CacheStore {
+	if maxEntries <= 0 {
+		maxEntries = 256
+	}
+	return &CacheStore{
+		data:       make(map[string]cacheEntry),
+		maxEntries: maxEntries,
+	}
+}
+
+func (c *CacheStore) get(meta cacheMeta, raw string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	c.mu.RLock()
+	entry, ok := c.data[meta.Key]
+	c.mu.RUnlock()
+	if !ok || !cacheEntryMatches(entry, meta, raw) {
+		return "", false
+	}
+	return entry.RawHTML, true
+}
+
+func (c *CacheStore) set(entry cacheEntry) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.data == nil {
+		c.data = make(map[string]cacheEntry)
+	}
+	if c.maxEntries <= 0 {
+		c.maxEntries = 256
+	}
+	if _, exists := c.data[entry.Key]; !exists {
+		c.order = append(c.order, entry.Key)
+	}
+	c.data[entry.Key] = entry
+	for len(c.order) > c.maxEntries {
+		evict := c.order[0]
+		c.order = c.order[1:]
+		delete(c.data, evict)
+	}
+	c.mu.Unlock()
 }
 
 type CacheIdentity struct {
@@ -258,6 +313,10 @@ func (r Runner) readCache(raw string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	// Check in-memory cache first.
+	if html, ok := r.CacheStore.get(meta, raw); ok {
+		return html, true
+	}
 	path := filepath.Join(r.CacheDir, meta.Key+".json")
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -270,6 +329,8 @@ func (r Runner) readCache(raw string) (string, bool) {
 	if !cacheEntryMatches(entry, meta, raw) {
 		return "", false
 	}
+	// Populate in-memory cache on disk hit.
+	r.CacheStore.set(entry)
 	return entry.RawHTML, true
 }
 
@@ -295,6 +356,7 @@ func (r Runner) writeCache(raw, rawHTML string) {
 		LaTeXMLVersion: meta.LaTeXMLVersion,
 		RawHTML:        rawHTML,
 	}
+	r.CacheStore.set(entry)
 	b, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return

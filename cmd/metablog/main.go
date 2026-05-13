@@ -95,6 +95,7 @@ func runSiteCommand(name string, args []string) error {
 		fs.IntVar(&cfg.ArticleWorkers, "article-workers", 0, "parallel article workers (for -watch); 0=auto")
 		fs.IntVar(&cfg.LaTeXMLWorkers, "latexml-workers", 0, "parallel LaTeXML workers (for -watch); 0=auto")
 		fs.BoolVar(&cfg.NoAssets, "no-assets", false, "skip asset conversion during watch rebuild")
+		fs.BoolVar(&cfg.OnlyRAM, "only-ram", false, "serve and rebuild entirely in memory")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}

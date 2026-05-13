@@ -17,17 +17,23 @@ type watchState struct {
 	lastMod         map[string]time.Time
 	mu              sync.Mutex
 	outDir          string
+	store           *memStore
+	sitePageKeys    map[string]struct{}
+	articlePageKeys map[string]struct{}
 	changes         chan string
 	rebuildRequest  chan struct{}
 	rebuildDebounce time.Duration
 }
 
-func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}) {
+func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}, store *memStore) {
 	state := &watchState{
 		cfg:             cfg,
 		siteData:        siteData,
 		lastMod:         make(map[string]time.Time),
 		outDir:          outDir,
+		store:           store,
+		sitePageKeys:    sitePageKeys(siteData),
+		articlePageKeys: articlePageKeys(siteData),
 		changes:         make(chan string, 16),
 		rebuildRequest:  make(chan struct{}, 1),
 		rebuildDebounce: 300 * time.Millisecond,
@@ -61,7 +67,7 @@ func (s *watchState) scan() {
 	if strings.TrimSpace(s.cfg.ArticlesFile) != "" {
 		articlesPath := filepath.Join(s.cfg.RootDir, s.cfg.ArticlesFile)
 		if s.changed("articles_config", articlesPath) {
-			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile)
+			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile, s.store)
 			if err != nil {
 				s.cfg.logf("Watch: reload site data failed: %v\n", err)
 				return
@@ -74,7 +80,7 @@ func (s *watchState) scan() {
 	if strings.TrimSpace(s.cfg.SiteConfig) != "" {
 		configPath := filepath.Join(s.cfg.RootDir, s.cfg.SiteConfig)
 		if s.changed("site_config", configPath) {
-			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile)
+			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile, s.store)
 			if err != nil {
 				s.cfg.logf("Watch: reload site data failed: %v\n", err)
 				return
@@ -184,22 +190,34 @@ func (s *watchState) executeRebuild(pending []string) {
 		} else if what == "articles config changed" {
 			rebuildIndex = true
 			rebuildStaleArticles = true
-			rebuildArticles = make(map[string]blog.Article)
 		} else if what == "site config changed" {
 			rebuildIndex = true
 			rebuildAbout = true
 			rebuildAllArticles = true
-			rebuildStaleArticles = false
-			rebuildArticles = make(map[string]blog.Article)
 		}
 	}
 
 	if rebuildIndex {
-		if err := writeSitePages(s.outDir, siteData); err != nil {
-			s.cfg.logf("Watch: write index pages failed: %v\n", err)
+		pages := buildSitePageMap(siteData)
+		indexOK := true
+		if s.store != nil {
+			s.sitePageKeys = s.store.replaceHTMLPages(s.sitePageKeys, pages)
 		} else {
+			if err := writePageMapToDisk(s.outDir, pages); err != nil {
+				s.cfg.logf("Watch: write index pages failed: %v\n", err)
+				indexOK = false
+			}
+		}
+		if indexOK {
 			s.cfg.logf("Watch: index pages regenerated\n")
 		}
+	}
+
+	if s.store != nil && (rebuildStaleArticles || rebuildAllArticles) {
+		nextArticleKeys := articlePageKeys(siteData)
+		removed := diffKeys(s.articlePageKeys, nextArticleKeys)
+		s.store.deleteFiles(removed)
+		s.articlePageKeys = nextArticleKeys
 	}
 
 	if rebuildAbout {
@@ -219,10 +237,24 @@ func (s *watchState) executeRebuild(pending []string) {
 	}
 }
 
+func writePageMapToDisk(outDir string, pages map[string]string) error {
+	for rel, htmlText := range pages {
+		path := filepath.Join(outDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(htmlText), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *watchState) rebuildSiteArticles(siteData *blog.Site, force bool) {
 	cfg := s.cfg
 	cfg.OutDir = s.outDir
 	cfg.Force = force
+	cfg.MemStore = s.store
 	if force {
 		cfg.logf("Watch: rebuilding all article pages\n")
 	} else {
@@ -249,13 +281,17 @@ func (s *watchState) rebuildAboutPage(siteData *blog.Site) {
 		s.cfg.logf("Watch: about page rebuild failed: %v\n", err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		s.cfg.logf("Watch: create about output directory failed: %v\n", err)
-		return
-	}
-	if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
-		s.cfg.logf("Watch: write about page failed: %v\n", err)
-		return
+	if s.store != nil {
+		s.store.put("about/index.html", []byte(htmlText))
+	} else {
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			s.cfg.logf("Watch: create about output directory failed: %v\n", err)
+			return
+		}
+		if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
+			s.cfg.logf("Watch: write about page failed: %v\n", err)
+			return
+		}
 	}
 	s.cfg.logf("Watch: about page rebuilt (%d warning(s))\n", len(warnings))
 	s.cfg.flushDocumentLogString("about page", docLog.String())
@@ -286,15 +322,50 @@ func (s *watchState) rebuildOneArticle(article blog.Article, siteData *blog.Site
 		s.cfg.logf("Watch: rebuild %s failed: %v\n", article.Title, err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		s.cfg.logf("Watch: create article output directory for %s failed: %v\n", article.Title, err)
-		return
-	}
-	if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
-		s.cfg.logf("Watch: write article %s failed: %v\n", article.Title, err)
-		return
+	if s.store != nil {
+		rel := "articles/" + slug + "/index.html"
+		s.store.put(rel, []byte(htmlText))
+	} else {
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			s.cfg.logf("Watch: create article output directory for %s failed: %v\n", article.Title, err)
+			return
+		}
+		if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
+			s.cfg.logf("Watch: write article %s failed: %v\n", article.Title, err)
+			return
+		}
 	}
 
 	s.cfg.logf("Watch: rebuilt %s (%d warning(s), source=%s)\n", article.Title, len(warnings), filepath.ToSlash(sourceDir))
 	s.cfg.flushDocumentLogString(article.Title, docLog.String())
+}
+
+func sitePageKeys(siteData *blog.Site) map[string]struct{} {
+	keys := make(map[string]struct{})
+	for path := range buildSitePageMap(siteData) {
+		keys[cleanMemPath(path)] = struct{}{}
+	}
+	return keys
+}
+
+func articlePageKeys(siteData *blog.Site) map[string]struct{} {
+	keys := make(map[string]struct{}, len(siteData.Articles))
+	for _, article := range siteData.Articles {
+		slug := blog.Slugify(article.Slug)
+		if slug == "" {
+			continue
+		}
+		keys["articles/"+slug+"/index.html"] = struct{}{}
+	}
+	return keys
+}
+
+func diffKeys(oldKeys, newKeys map[string]struct{}) map[string]struct{} {
+	diff := make(map[string]struct{})
+	for key := range oldKeys {
+		if _, ok := newKeys[key]; !ok {
+			diff[key] = struct{}{}
+		}
+	}
+	return diff
 }

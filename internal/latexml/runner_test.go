@@ -105,6 +105,46 @@ func TestCacheDisabledForExternalDependencyCommands(t *testing.T) {
 	}
 }
 
+func TestMemoryCacheRequiresExactRawTeXMatch(t *testing.T) {
+	bin := fakeLateXMLBin(t)
+	runner := Runner{Bin: bin, CacheDir: t.TempDir(), CacheStore: NewCacheStore(8)}
+	raw := `\begin{tabular}{c}A\end{tabular}`
+	rawHTML := `<html><body><table><tr><td>A</td></tr></table></body></html>`
+	meta, ok := runner.cacheMeta(raw)
+	if !ok {
+		t.Fatal("cache meta failed")
+	}
+	runner.CacheStore.set(cacheEntry{
+		Schema:         cacheSchema,
+		Key:            meta.Key,
+		RawTeX:         raw + "% changed",
+		RawTeXSHA256:   meta.RawTeXSHA256,
+		WrapperSHA256:  meta.WrapperSHA256,
+		ArgsSHA256:     meta.ArgsSHA256,
+		LaTeXMLBin:     meta.LaTeXMLBin,
+		LaTeXMLVersion: meta.LaTeXMLVersion,
+		RawHTML:        rawHTML,
+	})
+	if _, ok := runner.readCache(raw); ok {
+		t.Fatal("memory cache hit with mismatched raw TeX")
+	}
+}
+
+func TestMemoryCacheEvictsOldEntries(t *testing.T) {
+	store := NewCacheStore(2)
+	for _, key := range []string{"a", "b", "c"} {
+		store.set(cacheEntry{Schema: cacheSchema, Key: key, RawTeX: key, RawHTML: key})
+	}
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	if len(store.data) != 2 {
+		t.Fatalf("expected bounded memory cache size 2, got %d", len(store.data))
+	}
+	if _, ok := store.data["a"]; ok {
+		t.Fatal("oldest memory cache entry was not evicted")
+	}
+}
+
 func TestLateXMLVersionFallsBackToUppercaseOption(t *testing.T) {
 	bin := fakeLateXMLBinWithVersionOption(t, "--VERSION")
 	version, ok := lateXMLVersion(bin)

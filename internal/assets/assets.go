@@ -8,9 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"MetaBlog/internal/latex/ast"
 )
+
+type MemoryStore interface {
+	PutFile(path string, data []byte, modTime time.Time)
+	FileFresh(path string, sourceInfo os.FileInfo) bool
+}
 
 type Converter struct {
 	SourceRoot  string
@@ -22,6 +28,7 @@ type Converter struct {
 	Log         io.Writer
 	LogMu       *sync.Mutex
 	Stats       *Stats
+	MemoryStore MemoryStore
 }
 
 type Stats struct {
@@ -111,6 +118,21 @@ func (c Converter) convert(src string) (string, error) {
 	if ext == ".pdf" {
 		relOut := filepath.ToSlash(relNoExt + ".svg")
 		assetRel := c.assetRelPath(relOut)
+		memRel := filepath.ToSlash(filepath.Join("assets", filepath.FromSlash(assetRel)))
+		if c.MemoryStore != nil {
+			if c.MemoryStore.FileFresh(memRel, sourceInfo) {
+				c.recordFresh()
+				return c.linkPath("assets", assetRel), nil
+			}
+			c.recordPDFConverted()
+			c.logf("Asset convert PDF to SVG in memory: %s -> %s\n", filepath.ToSlash(sourcePath), memRel)
+			data, err := convertPDFToBytes(sourcePath)
+			if err != nil {
+				return "", fmt.Errorf("convert pdf %s: %w", src, err)
+			}
+			c.MemoryStore.PutFile(memRel, data, sourceInfo.ModTime())
+			return c.linkPath("assets", assetRel), nil
+		}
 		outPath := filepath.Join(c.OutDir, "assets", filepath.FromSlash(assetRel))
 		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 			return "", err
@@ -128,6 +150,21 @@ func (c Converter) convert(src string) (string, error) {
 	}
 	relOut := filepath.ToSlash(clean)
 	assetRel := c.assetRelPath(relOut)
+	memRel := filepath.ToSlash(filepath.Join("assets", filepath.FromSlash(assetRel)))
+	if c.MemoryStore != nil {
+		if c.MemoryStore.FileFresh(memRel, sourceInfo) {
+			c.recordFresh()
+			return c.linkPath("assets", assetRel), nil
+		}
+		data, err := os.ReadFile(sourcePath)
+		if err != nil {
+			return "", err
+		}
+		c.recordCopied()
+		c.logf("Asset copy to memory: %s -> %s\n", filepath.ToSlash(sourcePath), memRel)
+		c.MemoryStore.PutFile(memRel, data, sourceInfo.ModTime())
+		return c.linkPath("assets", assetRel), nil
+	}
 	outPath := filepath.Join(c.OutDir, "assets", filepath.FromSlash(assetRel))
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return "", err
@@ -200,6 +237,19 @@ func convertPDF(src, dst string) error {
 		return validateOutput(dst)
 	}
 	return fmt.Errorf("no PDF to SVG converter found")
+}
+
+func convertPDFToBytes(src string) ([]byte, error) {
+	tempDir, err := os.MkdirTemp("", "metablog-asset-pdf-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
+	dst := filepath.Join(tempDir, "asset.svg")
+	if err := convertPDF(src, dst); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(dst)
 }
 
 func validateOutput(path string) error {

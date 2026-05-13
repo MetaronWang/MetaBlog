@@ -158,7 +158,7 @@ func copyConfiguredSiteAsset(rootDir, outDir, rel string) (string, error) {
 	return outRel, nil
 }
 
-func writeSitePages(outDir string, s *blog.Site) error {
+func buildSitePageMap(s *blog.Site) map[string]string {
 	pages := map[string]string{
 		"tags/index.html":       blog.RenderTagsIndex(s.Config, s.Articles),
 		"categories/index.html": blog.RenderCategoriesIndex(s.Config, s.Articles),
@@ -197,6 +197,11 @@ func writeSitePages(outDir string, s *blog.Site) error {
 			pages[blog.CategoryPageURL(path, page)] = blog.RenderCategoryPagePage(s.Config, path, s.Articles, page, base)
 		}
 	}
+	return pages
+}
+
+func writeSitePages(outDir string, s *blog.Site) error {
+	pages := buildSitePageMap(s)
 	for rel, htmlText := range pages {
 		path := filepath.Join(outDir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -244,13 +249,17 @@ func buildSiteAboutPage(cfg Config, s *blog.Site) ([]string, string, error) {
 		return warnings, docLog.String(), err
 	}
 	logWarnings(docCfg, warnings)
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		docCfg.logf("Create output directory failed: %v\n", err)
-		return warnings, docLog.String(), err
-	}
-	if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
-		docCfg.logf("Write output failed: %v\n", err)
-		return warnings, docLog.String(), err
+	if cfg.MemStore != nil {
+		cfg.MemStore.put("about/index.html", []byte(htmlText))
+	} else {
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			docCfg.logf("Create output directory failed: %v\n", err)
+			return warnings, docLog.String(), err
+		}
+		if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
+			docCfg.logf("Write output failed: %v\n", err)
+			return warnings, docLog.String(), err
+		}
 	}
 	docCfg.logf("Built: %s (%s, warning(s)=%d)\n", filepath.ToSlash(outPath), time.Since(started).Round(time.Millisecond), len(warnings))
 	return warnings, docLog.String(), nil
@@ -369,6 +378,9 @@ func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Artic
 			LogMu:       docCfg.LogMu,
 			Stats:       assetStats,
 		}
+		if cfg.MemStore != nil {
+			converter.MemoryStore = cfg.MemStore
+		}
 		if _, err := converter.ConvertFile(article.MainFig); err != nil {
 			docCfg.logf("Main figure failed: %v\n", err)
 			warnings = append(warnings, err.Error())
@@ -396,15 +408,19 @@ func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Artic
 		return result
 	}
 	logWarnings(docCfg, warnings)
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		docCfg.logf("Create output directory failed: %v\n", err)
-		result.err = err
-		return result
-	}
-	if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
-		docCfg.logf("Write output failed: %v\n", err)
-		result.err = err
-		return result
+	if cfg.MemStore != nil {
+		cfg.MemStore.put("articles/"+slug+"/index.html", []byte(htmlText))
+	} else {
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			docCfg.logf("Create output directory failed: %v\n", err)
+			result.err = err
+			return result
+		}
+		if err := os.WriteFile(outPath, []byte(htmlText), 0644); err != nil {
+			docCfg.logf("Write output failed: %v\n", err)
+			result.err = err
+			return result
+		}
 	}
 	docCfg.logf("Built: %s (%s, warning(s)=%d)\n", filepath.ToSlash(outPath), time.Since(started).Round(time.Millisecond), len(warnings))
 	return result

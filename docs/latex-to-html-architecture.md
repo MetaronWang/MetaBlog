@@ -854,6 +854,25 @@ metablog site build -subset-fonts
 
 **与 HTTP 服务器的协调**：监听器在独立的 goroutine 中运行，与 HTTP 文件服务器共享同一个输出目录。重编译完成后，HTTP 服务器自动提供更新后的文件，无需重启。
 
+### 23.2 纯内存模式（Only-RAM）
+
+`site serve -only-ram` 进一步将所有输出文件操作移入内存。
+
+**MemStore**：`memStore` 是一个 `sync.RWMutex` 保护的内存文件表，以相对路径为键存储文件内容和内存中的修改时间。启动时通过 `loadDir` 递归加载整个 `out/` 目录。MemStore 实现了 `http.Handler` 接口，替代 `http.FileServer` 直接从内存响应用户请求。
+
+**输出路径**：当 `Config.MemStore != nil` 时，`buildSiteAboutPage` 和 `buildOneSiteArticle` 跳过所有磁盘 `WriteFile` 调用，仅将 HTML 内容写入 MemStore。watch 模式下的 `rebuildAboutPage` 和 `rebuildOneArticle` 同理，通过 `watchState.store` 判断使用内存还是磁盘路径。
+
+**LaTeXML 内存缓存**：`latexml.CacheStore` 提供了一个可选的有界内存读缓存层。在 `readCache` 中，先通过 `CacheStore.get(meta, raw)` 查找内存；miss 后才执行磁盘 `os.ReadFile`；磁盘命中后将完整缓存条目写入内存供后续使用。内存命中仍会校验缓存 key、环境信息和完整 RawTeX，语义与磁盘缓存一致。`CacheStore` 由 `loadSiteForWatch` 在 `-only-ram` 启用时创建，通过 `Config.CacheStore` 传递到 `buildArticle` 中的 `latexml.Runner`。
+
+**资源处理**：当 `Config.MemStore != nil` 且未显式 `-no-assets` 时，文档图片、主图、logo 和 icon 等资源会写入 MemStore，而不写入 `out/`。普通文件直接读取源文件进入内存；PDF 转 SVG 需要通过临时文件调用外部转换器，转换产物读取后写入 MemStore，临时目录随后删除。
+
+**内存泄漏预防**：
+- MemStore 使用单层文件表，覆盖写入时旧内容由 GC 自动回收。
+- 索引页重建时会用新的页面集合替换旧集合，删除已经失效的 tag/category/page URL。
+- 文章元数据变化时会删除不再注册的文章页，避免内存中长期保留孤立文章输出。
+- watch 去抖和 channel 操作均使用带缓冲的 channel，发送方以 non-blocking select 避免阻塞和 goroutine 泄漏。
+- LaTeXML CacheStore 有容量上限，超过上限时淘汰最早写入的缓存条目，避免长时间编辑复杂块导致内存缓存无限增长。
+
 ## 24. Warning 和错误策略
 
 MetaBlog 尽量区分错误和 warning：
@@ -882,6 +901,7 @@ MetaBlog 尽量区分错误和 warning：
 | `internal/app/site_init.go` | 网站初始化，创建目录、写入内置模板、下载字体、检测环境。 |
 | `internal/app/site_serve.go` | 本地预览服务器，监听指定 host/port 并用静态文件服务器暴露输出目录。 |
 | `internal/app/serve_watch.go` | 文件监听和热重编译：轮询源目录修改时间，在文件变更时增量编译对应文档并更新输出。 |
+| `internal/app/memstore.go` | 内存文件存储：提供 HTTP 文件服务、并发安全的读写接口，用于 `-only-ram` 模式。 |
 | `internal/app/article_cli.go` | `article init/edit/delete` 的交互式元数据维护。 |
 | `internal/app/cache.go` | `.metablog-cache/` 清理。 |
 

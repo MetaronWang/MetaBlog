@@ -139,6 +139,48 @@ Press Ctrl+C to stop.
 Watch: rebuilt My Article (0 warning(s), source=articles/my-article/)
 ```
 
+### 纯内存模式（Only-RAM）
+
+启用 `-only-ram` 后，`site serve` 将整个 `out/` 目录加载到内存中，后续所有重编译更新仅操作内存，不再写入硬盘：
+
+```bash
+metablog site serve -out out -watch -root . -only-ram
+```
+
+Only-RAM 模式行为：
+
+- **初始加载**：启动时递归读取 `out/` 下所有文件到内存映射中。
+- **HTTP 服务**：直接从内存读取内容返回，不再通过文件系统。
+- **热重编译**：watch 模式下，所有页面（索引页、文章页、关于页）的重编译结果仅更新内存映射，不写入 `out/` 目录。
+- **LaTeXML 缓存**：依旧落盘到 `.metablog-cache/latexml/`。此外自动启用内存读缓存——先在内存中查找缓存，miss 后再读硬盘并回填内存缓存，降低低性能硬盘的 I/O 压力。
+- **资源处理**：未显式传入 `-no-assets` 时，图片等文档资源也会更新到内存映射中，不写入 `out/` 目录；PDF 转 SVG 会使用临时文件承接外部转换器输出，最终 SVG 仍只进入内存站点。
+- **站点资源**：logo、icon 等站点级资源在 watch 启动和配置重载时写入内存映射，配置中的路径仍改写为 `assets/site/...`。
+
+注意事项：
+
+- `-only-ram` 需要先通过 `metablog site build` 生成 `out/` 目录。
+- 大型站点会占用较多内存（每个 HTML 页面和静态资源常驻内存）。
+- 内存中的站点页面会清理已经失效的索引页和文章页，避免 tag/category 或文章元数据频繁变化时旧页面持续滞留。
+- 后台的 LaTeXML 缓存命中统计在日志中正常上报；内存读缓存本身有容量上限，避免长时间编辑复杂块时无限增长。
+
+示例：
+
+```bash
+# 构建后启动纯内存 watch 模式
+metablog site build -root . -out out
+metablog site serve -out out -watch -root . -only-ram
+```
+
+启动日志：
+
+```text
+Only-RAM: loaded 125 files from /path/to/site/out
+Serving /path/to/site/out
+URL: http://127.0.0.1:51324/
+Watch: monitoring 3 article(s) and about page for changes
+Press Ctrl+C to stop.
+```
+
 ## 初始化网站目录
 
 ```bash
