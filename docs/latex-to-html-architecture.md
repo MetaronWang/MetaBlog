@@ -554,7 +554,7 @@ Block parser 基于源码位置和 token 边界推进。
 
 | Block | 来源 |
 | --- | --- |
-| Section | `\section`、`\subsection`、`\subsubsection`。 |
+| Section | `\section`、`\subsection`、`\subsubsection`、`\subsubsubsection`。 |
 | Paragraph | 普通段落。 |
 | MathBlock | `\[...\]`、`equation`、`align` 等。 |
 | Figure | `figure` / `figure*`。 |
@@ -575,6 +575,7 @@ Block parser 基于源码位置和 token 边界推进。
 \section{...}
 \subsection{...}
 \subsubsection{...}
+\subsubsubsection{...}
 \appendices
 ```
 
@@ -715,7 +716,7 @@ Parser 负责语义结构，Render 负责编号和最终 HTML。
 
 | 对象 | 格式 |
 | --- | --- |
-| Section | `1`、`1.1`、`1.1.1`；附录为 `App. A`。 |
+| Section | `1`、`1.1`、`1.1.1`、`1.1.1.1`；附录为 `App. A`。 |
 | Figure | `1`、`2`。 |
 | Subfigure | `(a)` 显示，引用为 `1.a`。 |
 | Table | `1`、`2`。 |

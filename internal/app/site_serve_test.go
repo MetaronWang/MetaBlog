@@ -55,6 +55,86 @@ func TestRunSiteServeServesStaticFiles(t *testing.T) {
 	}
 }
 
+func TestRunSiteServeInitialBuildBeforeServing(t *testing.T) {
+	dir := t.TempDir()
+	aboutDir := filepath.Join(dir, "data", "about_page")
+	if err := os.MkdirAll(aboutDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(aboutDir, "main.tex"), []byte(`\begin{document}About\end{document}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	articleDir := filepath.Join(dir, "articles", "new-article")
+	if err := os.MkdirAll(articleDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(articleDir, "main.tex"), []byte(`\begin{document}
+\section{New Article}
+Built before serve.
+\end{document}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "config.toml"), []byte(`title = "Initial Build"`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "articles.toml"), []byte(`[[articles]]
+title = "New Article"
+date = "2026-05-14"
+folder = "articles/new-article"
+main_file = "main.tex"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := filepath.Join(dir, "out")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	errCh := make(chan error, 1)
+	var out bytes.Buffer
+	go func() {
+		errCh <- RunSiteServe(SiteServeConfig{
+			InitialBuild: true,
+			OutDir:       outDir,
+			Host:         "127.0.0.1",
+			Out:          &out,
+			Listener:     listener,
+			Stop:         stop,
+			RootDir:      dir,
+			SiteConfig:   "data/config.toml",
+			ArticlesFile: "data/articles.toml",
+			NoAssets:     true,
+		})
+	}()
+	baseURL := "http://" + listener.Addr().String()
+	waitForHTTP(t, baseURL+"/")
+	resp, err := http.Get(baseURL + "/articles/new-article/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "Built before serve.") {
+		t.Fatalf("initial build article not served:\n%s\nlog:\n%s", string(body), out.String())
+	}
+	close(stop)
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Initial build before serve") {
+		t.Fatalf("initial build log missing:\n%s", out.String())
+	}
+}
+
 func TestRunSiteServeRejectsMissingDirectory(t *testing.T) {
 	err := RunSiteServe(SiteServeConfig{
 		OutDir: filepath.Join(t.TempDir(), "missing"),

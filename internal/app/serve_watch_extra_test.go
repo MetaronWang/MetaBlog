@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,6 +181,42 @@ Modified live reload content.
 	close(stop)
 	if err := <-errCh; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestInjectLiveReloadScriptReplacesOldInjectedScript(t *testing.T) {
+	old := `<html><body><main>content</main><script>
+(function() {
+  var endpoint = "` + liveReloadEndpoint + `";
+  var currentVersion = "1";
+})();
+</script></body></html>`
+	got := injectLiveReloadScript(old, 7)
+	if strings.Count(got, liveReloadEndpoint) != 1 {
+		t.Fatalf("expected exactly one live reload script, got:\n%s", got)
+	}
+	if strings.Contains(got, `currentVersion = "1"`) {
+		t.Fatalf("old live reload version was preserved:\n%s", got)
+	}
+	if !strings.Contains(got, `currentVersion = "7"`) {
+		t.Fatalf("new live reload version missing:\n%s", got)
+	}
+	if !strings.Contains(got, `minReloadInterval = 3000`) {
+		t.Fatalf("live reload minimum interval missing:\n%s", got)
+	}
+	if !strings.Contains(got, `currentVersion = version`) {
+		t.Fatalf("live reload script does not consume version changes before reload:\n%s", got)
+	}
+}
+
+func TestLiveReloadVersionNormalizesEscapedUnicodePath(t *testing.T) {
+	state := newLiveReloadState()
+	slug := "\u9ad8\u65af\u8fc7\u7a0b"
+	state.MarkUpdated("articles/" + slug + "/index.html")
+
+	escaped := "/articles/" + url.PathEscape(slug) + "/"
+	if got, want := state.Version(escaped), state.Version("/articles/"+slug+"/"); got != want || got == 0 {
+		t.Fatalf("escaped path version mismatch: got %d, want %d", got, want)
 	}
 }
 

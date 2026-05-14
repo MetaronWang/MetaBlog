@@ -539,7 +539,7 @@ func (bp *blockParser) atSectionCommand() bool {
 		return false
 	}
 	switch tok.Value {
-	case "section", "subsection", "subsubsection":
+	case "section", "subsection", "subsubsection", "subsubsubsection":
 		return true
 	default:
 		return false
@@ -784,7 +784,7 @@ func (bp *blockParser) isBlockBoundaryToken(tok lexer.Token, paragraphStart int)
 		return tok.Kind == lexer.Raw || isBlockStyledGroupCandidate(bp.raw, paragraphStart, tok.Start)
 	case lexer.Command:
 		switch tok.Value {
-		case "begin", "[", "bibliographystyle", "bibliography", "appendices", "section", "subsection", "subsubsection":
+		case "begin", "[", "bibliographystyle", "bibliography", "appendices", "section", "subsection", "subsubsection", "subsubsubsection":
 			return true
 		default:
 			return false
@@ -2262,6 +2262,8 @@ func sectionLevel(cmd string) int {
 		return 2
 	case "subsubsection":
 		return 3
+	case "subsubsubsection":
+		return 4
 	default:
 		return 1
 	}
@@ -2269,7 +2271,7 @@ func sectionLevel(cmd string) int {
 
 func isSectionCommandValue(cmd string) bool {
 	switch cmd {
-	case "section", "subsection", "subsubsection":
+	case "section", "subsection", "subsubsection", "subsubsubsection":
 		return true
 	default:
 		return false

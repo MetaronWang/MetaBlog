@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -131,20 +132,45 @@ func (h liveReloadHandler) readHTML(urlPath string) (string, bool) {
 }
 
 func injectLiveReloadScript(page string, initialVersion uint64) string {
-	if strings.Contains(page, liveReloadEndpoint) {
-		return page
-	}
+	page = stripLiveReloadScripts(page)
 	script := `<script>
 (function() {
   var endpoint = "` + html.EscapeString(liveReloadEndpoint) + `";
   var currentVersion = "` + strconv.FormatUint(initialVersion, 10) + `";
+  var minReloadInterval = 3000;
+  var reloadTimer = null;
+  var storageKey = "metablog-live-reload:" + window.location.pathname;
+  function lastReloadTime() {
+    try {
+      return Number(window.sessionStorage.getItem(storageKey)) || 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+  function markReloadTime() {
+    try {
+      window.sessionStorage.setItem(storageKey, String(Date.now()));
+    } catch (err) {}
+  }
+  function scheduleReload() {
+    if (reloadTimer !== null) {
+      return;
+    }
+    var elapsed = Date.now() - lastReloadTime();
+    var delay = Math.max(0, minReloadInterval - elapsed);
+    reloadTimer = window.setTimeout(function() {
+      markReloadTime();
+      window.location.reload();
+    }, delay);
+  }
   function check() {
     fetch(endpoint + "?path=" + encodeURIComponent(window.location.pathname), { cache: "no-store" })
       .then(function(resp) { return resp.text(); })
       .then(function(text) {
         var version = text.trim();
         if (version !== currentVersion) {
-          window.location.reload();
+          currentVersion = version;
+          scheduleReload();
         }
       })
       .catch(function() {});
@@ -161,7 +187,37 @@ func injectLiveReloadScript(page string, initialVersion uint64) string {
 	return page + script
 }
 
+func stripLiveReloadScripts(page string) string {
+	for {
+		lower := strings.ToLower(page)
+		start := strings.Index(lower, "<script")
+		if start < 0 {
+			return page
+		}
+		openEndRel := strings.Index(lower[start:], ">")
+		if openEndRel < 0 {
+			return page
+		}
+		endRel := strings.Index(lower[start+openEndRel+1:], "</script>")
+		if endRel < 0 {
+			return page
+		}
+		end := start + openEndRel + 1 + endRel + len("</script>")
+		block := page[start:end]
+		if strings.Contains(block, liveReloadEndpoint) {
+			page = page[:start] + page[end:]
+			continue
+		}
+		nextStart := end
+		rest := stripLiveReloadScripts(page[nextStart:])
+		return page[:nextStart] + rest
+	}
+}
+
 func normalizeReloadPath(path string) string {
+	if decoded, err := url.PathUnescape(path); err == nil {
+		path = decoded
+	}
 	clean := cleanMemPath(path)
 	if clean == "" {
 		return "index.html"

@@ -798,6 +798,33 @@ Appendix body.`, nil, "main.tex", ".")
 	}
 }
 
+func TestSubSubSubSectionBuildsFourthLevelSection(t *testing.T) {
+	doc, err := Parse(`\section{Main}
+\subsection{Sub}
+\subsubsection{Sub Sub}
+\subsubsubsection{Fourth}
+Body.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one top-level section, got %#v", doc.Children)
+	}
+	mainSec := doc.Children[0].(*ast.Section)
+	subSec := mainSec.Children[0].(*ast.Section)
+	subSubSec := subSec.Children[0].(*ast.Section)
+	fourthSec, ok := subSubSec.Children[0].(*ast.Section)
+	if !ok {
+		t.Fatalf("fourth-level section not parsed: %#v", subSubSec.Children)
+	}
+	if fourthSec.Level != 4 || blockInlineText(fourthSec.Title) != "Fourth" {
+		t.Fatalf("unexpected fourth-level section: %#v", fourthSec)
+	}
+	if blockText(fourthSec.Children[0]) != "Body." {
+		t.Fatalf("fourth-level section body parsed incorrectly: %#v", fourthSec.Children)
+	}
+}
+
 func TestDisplayMathBracketBlockUsesBlockParser(t *testing.T) {
 	doc, err := Parse(`Before.
 

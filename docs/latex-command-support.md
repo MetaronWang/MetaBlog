@@ -28,7 +28,7 @@ MetaBlog 对 LaTeX 的支持分为三类：
 | 注释 | `%`、`\%` | 支持；原样环境中不处理注释。 |
 | 元信息 | `\title`、`\author`、`\defInstitution` | 支持项目自定义格式。 |
 | 摘要关键词 | `abstract`、`keywords`、`IEEEkeywords` | 支持，原位置渲染。 |
-| 章节 | `\section`、`\subsection`、`\subsubsection`、`\appendices` | 支持。 |
+| 章节 | `\section`、`\subsection`、`\subsubsection`、`\subsubsubsection`、`\appendices` | 支持。 |
 | 交叉引用 | `\label`、`\ref` | 支持。 |
 | 文献引用 | `\cite`、`\bibliography`、`\bibliographystyle` | 支持简化 IEEE 风格。 |
 | 段落列表 | 普通段落、`itemize`、`enumerate`、`description` | 支持嵌套。 |
@@ -187,6 +187,7 @@ keyword 1, keyword 2
 \section{...}
 \subsection{...}
 \subsubsection{...}
+\subsubsubsection{...}
 ```
 
 能力：

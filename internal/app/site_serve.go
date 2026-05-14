@@ -25,6 +25,9 @@ type SiteServeConfig struct {
 	Listener net.Listener
 	Stop     <-chan struct{}
 
+	// InitialBuild runs a full site build before starting the HTTP server.
+	InitialBuild bool
+
 	// Watch mode: monitor source files and hot-rebuild changed articles.
 	Watch          bool
 	RootDir        string
@@ -34,6 +37,8 @@ type SiteServeConfig struct {
 	ArticleWorkers int
 	LaTeXMLWorkers int
 	NoAssets       bool
+	Force          bool
+	NoLaTeXMLCache bool
 
 	// OnlyRAM: serve and rebuild entirely in memory (no disk writes for output).
 	OnlyRAM bool
@@ -41,6 +46,11 @@ type SiteServeConfig struct {
 
 func RunSiteServe(cfg SiteServeConfig) error {
 	cfg = normalizeSiteServeConfig(cfg)
+	if cfg.InitialBuild {
+		if err := buildBeforeServe(cfg); err != nil {
+			return err
+		}
+	}
 	outDir, err := filepath.Abs(cfg.OutDir)
 	if err != nil {
 		return err
@@ -145,6 +155,8 @@ func loadSiteForWatch(cfg SiteServeConfig, outDir string, store *memStore) (*blo
 		ArticleWorkers: cfg.ArticleWorkers,
 		LaTeXMLWorkers: cfg.LaTeXMLWorkers,
 		NoAssets:       cfg.NoAssets,
+		Force:          cfg.Force,
+		NoLaTeXMLCache: cfg.NoLaTeXMLCache,
 		Log:            cfg.Out,
 		MemStore:       store,
 	}
@@ -221,6 +233,25 @@ func normalizeSiteServeConfig(cfg SiteServeConfig) SiteServeConfig {
 		cfg.Out = io.Discard
 	}
 	return cfg
+}
+
+func buildBeforeServe(cfg SiteServeConfig) error {
+	buildCfg := Config{
+		Site:           true,
+		RootDir:        cfg.RootDir,
+		SiteConfig:     cfg.SiteConfig,
+		ArticlesFile:   cfg.ArticlesFile,
+		OutDir:         cfg.OutDir,
+		LaTeXMLBin:     cfg.LaTeXMLBin,
+		ArticleWorkers: cfg.ArticleWorkers,
+		LaTeXMLWorkers: cfg.LaTeXMLWorkers,
+		NoAssets:       cfg.NoAssets,
+		Force:          cfg.Force,
+		NoLaTeXMLCache: cfg.NoLaTeXMLCache,
+		Log:            cfg.Out,
+	}
+	cfg.logf("Initial build before serve\n")
+	return RunSite(buildCfg)
 }
 
 func serveURL(addr net.Addr, host string) string {

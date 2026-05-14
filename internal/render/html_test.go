@@ -91,6 +91,26 @@ func TestTOCMissingIntermediateLevelGetsVisualIndent(t *testing.T) {
 	}
 }
 
+func TestFourthLevelSectionRendersAsH5(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Section{
+				Level: 4,
+				Title: []ast.Inline{&ast.Text{Value: "Fourth"}},
+			},
+		},
+	}
+
+	got := Render(doc)
+	if !strings.Contains(got, `class="section level-4"><h5`) {
+		t.Fatalf("fourth-level section did not render as h5:\n%s", got)
+	}
+	if !strings.Contains(got, `class="toc-level-4"`) {
+		t.Fatalf("fourth-level section missing from TOC:\n%s", got)
+	}
+}
+
 func TestRenderWithOptionsIncludesIcon(t *testing.T) {
 	doc := &ast.Document{
 		Title: []ast.Inline{&ast.Text{Value: "Test"}},

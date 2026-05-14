@@ -83,6 +83,7 @@ func runSiteCommand(name string, args []string) error {
 		return app.Run(cfg)
 	case "serve":
 		var cfg app.SiteServeConfig
+		cfg.InitialBuild = true
 		fs := flag.NewFlagSet("metablog site serve", flag.ExitOnError)
 		fs.StringVar(&cfg.OutDir, "out", "out", "static site output directory")
 		fs.StringVar(&cfg.Host, "host", "127.0.0.1", "host address to listen on")
@@ -95,6 +96,8 @@ func runSiteCommand(name string, args []string) error {
 		fs.IntVar(&cfg.ArticleWorkers, "article-workers", 0, "parallel article workers (for -watch); 0=auto")
 		fs.IntVar(&cfg.LaTeXMLWorkers, "latexml-workers", 0, "parallel LaTeXML workers (for -watch); 0=auto")
 		fs.BoolVar(&cfg.NoAssets, "no-assets", false, "skip asset conversion during watch rebuild")
+		fs.BoolVar(&cfg.Force, "force", false, "force rebuild site documents even when outputs are fresh before serving")
+		fs.BoolVar(&cfg.NoLaTeXMLCache, "no-latexml-cache", false, "ignore LaTeXML complex block cache")
 		fs.BoolVar(&cfg.OnlyRAM, "only-ram", false, "serve and rebuild entirely in memory")
 		if err := fs.Parse(args); err != nil {
 			return err
