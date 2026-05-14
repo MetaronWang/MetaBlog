@@ -218,3 +218,51 @@ fmt.Println("200% stays")
 		t.Fatalf("input inside raw environment was expanded:\n%s", loaded.Document)
 	}
 }
+
+func TestLoadIgnoresDocumentMarkersInsideRawBeforeDocument(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.tex")
+	if err := os.WriteFile(mainPath, []byte(`\begin{verbatim}
+\begin{document}
+wrong body
+\end{verbatim}
+
+\begin{document}
+real body
+\end{document}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(mainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(loaded.Document, "real body") {
+		t.Fatalf("real document body missing: %q", loaded.Document)
+	}
+	if strings.Contains(loaded.Document, "wrong body") {
+		t.Fatalf("raw preamble document marker was used as real body: %q", loaded.Document)
+	}
+}
+
+func TestLoadIgnoresEndDocumentInsideRawBody(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.tex")
+	if err := os.WriteFile(mainPath, []byte(`\begin{document}
+before
+\begin{lstlisting}
+\end{document}
+\end{lstlisting}
+after
+\end{document}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(mainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(loaded.Document, "after") {
+		t.Fatalf("document ended at raw environment marker: %q", loaded.Document)
+	}
+}

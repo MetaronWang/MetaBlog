@@ -15,3 +15,5 @@ build_release.bat
 asset/*
 !.gitignore
 CLAUDE.md
+docs/修改方案*
+docs/代码审查*

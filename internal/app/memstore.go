@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,8 +19,9 @@ type memStore struct {
 }
 
 type memFile struct {
-	data    []byte
-	modTime time.Time
+	data        []byte
+	modTime     time.Time
+	contentType string
 }
 
 func newMemStore() *memStore {
@@ -51,7 +53,7 @@ func (m *memStore) loadDir(dir string) error {
 			return err
 		}
 		m.mu.Lock()
-		m.files[rel] = memFile{data: data, modTime: info.ModTime()}
+		m.files[rel] = memFile{data: data, modTime: info.ModTime(), contentType: mimeByExt(rel)}
 		m.markDirsLocked(rel)
 		m.mu.Unlock()
 		return nil
@@ -64,7 +66,7 @@ func (m *memStore) get(path string) ([]byte, string, bool) {
 	file, ok := m.files[path]
 	m.mu.RUnlock()
 	if ok {
-		return file.data, mimeByExt(path), true
+		return file.data, fileContentType(file, path), true
 	}
 	// For directory paths, try index.html.
 	if path == "" || strings.HasSuffix(path, "/") {
@@ -88,7 +90,7 @@ func (m *memStore) get(path string) ([]byte, string, bool) {
 }
 
 func (m *memStore) put(path string, data []byte) {
-	m.PutFile(path, data, time.Now())
+	m.PutFileOwned(path, data, time.Now())
 }
 
 func (m *memStore) PutFile(path string, data []byte, modTime time.Time) {
@@ -98,7 +100,18 @@ func (m *memStore) PutFile(path string, data []byte, modTime time.Time) {
 	}
 	copied := append([]byte(nil), data...)
 	m.mu.Lock()
-	m.files[path] = memFile{data: copied, modTime: modTime}
+	m.files[path] = memFile{data: copied, modTime: modTime, contentType: mimeByExt(path)}
+	m.markDirsLocked(path)
+	m.mu.Unlock()
+}
+
+func (m *memStore) PutFileOwned(path string, data []byte, modTime time.Time) {
+	path = cleanMemPath(path)
+	if modTime.IsZero() {
+		modTime = time.Now()
+	}
+	m.mu.Lock()
+	m.files[path] = memFile{data: data, modTime: modTime, contentType: mimeByExt(path)}
 	m.markDirsLocked(path)
 	m.mu.Unlock()
 }
@@ -115,14 +128,18 @@ func (m *memStore) FileFresh(path string, sourceInfo os.FileInfo) bool {
 }
 
 func (m *memStore) putHTML(path string, content string) {
-	m.put(path, []byte(content))
+	path = cleanMemPath(path)
+	m.mu.Lock()
+	m.files[path] = memFile{data: []byte(content), modTime: time.Now(), contentType: "text/html; charset=utf-8"}
+	m.markDirsLocked(path)
+	m.mu.Unlock()
 }
 
 func (m *memStore) putAll(pages map[string]string) {
 	m.mu.Lock()
 	for path, content := range pages {
 		clean := cleanMemPath(path)
-		m.files[clean] = memFile{data: []byte(content), modTime: time.Now()}
+		m.files[clean] = memFile{data: []byte(content), modTime: time.Now(), contentType: "text/html; charset=utf-8"}
 		m.markDirsLocked(clean)
 	}
 	m.mu.Unlock()
@@ -143,7 +160,7 @@ func (m *memStore) replaceHTMLPages(previous map[string]struct{}, pages map[stri
 	}
 	now := time.Now()
 	for clean, content := range cleanPages {
-		m.files[clean] = memFile{data: []byte(content), modTime: now}
+		m.files[clean] = memFile{data: []byte(content), modTime: now, contentType: "text/html; charset=utf-8"}
 		m.markDirsLocked(clean)
 		next[clean] = struct{}{}
 	}
@@ -196,7 +213,8 @@ func (m *memStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
-	w.Write(data)
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
 }
 
 func cleanMemPath(path string) string {
@@ -221,4 +239,11 @@ func mimeByExt(path string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func fileContentType(file memFile, path string) string {
+	if file.contentType != "" {
+		return file.contentType
+	}
+	return mimeByExt(path)
 }

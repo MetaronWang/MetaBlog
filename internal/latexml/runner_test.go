@@ -145,6 +145,69 @@ func TestMemoryCacheEvictsOldEntries(t *testing.T) {
 	}
 }
 
+func TestMemoryCachePromotesHitsForLRU(t *testing.T) {
+	runner := Runner{Bin: fakeLateXMLBin(t), CacheStore: NewCacheStore(2)}
+	rawA := `\begin{tabular}{c}A\end{tabular}`
+	rawB := `\begin{tabular}{c}B\end{tabular}`
+	rawC := `\begin{tabular}{c}C\end{tabular}`
+	for _, raw := range []string{rawA, rawB} {
+		meta, ok := runner.cacheMeta(raw)
+		if !ok {
+			t.Fatal("cache meta failed")
+		}
+		runner.CacheStore.set(cacheEntry{
+			Schema:         cacheSchema,
+			Key:            meta.Key,
+			RawTeX:         raw,
+			RawTeXSHA256:   meta.RawTeXSHA256,
+			WrapperSHA256:  meta.WrapperSHA256,
+			ArgsSHA256:     meta.ArgsSHA256,
+			LaTeXMLBin:     meta.LaTeXMLBin,
+			LaTeXMLVersion: meta.LaTeXMLVersion,
+			RawHTML:        raw,
+		})
+	}
+	metaA, _ := runner.cacheMeta(rawA)
+	if _, ok := runner.CacheStore.get(metaA, rawA); !ok {
+		t.Fatal("expected cache hit for A")
+	}
+	metaC, _ := runner.cacheMeta(rawC)
+	runner.CacheStore.set(cacheEntry{
+		Schema:         cacheSchema,
+		Key:            metaC.Key,
+		RawTeX:         rawC,
+		RawTeXSHA256:   metaC.RawTeXSHA256,
+		WrapperSHA256:  metaC.WrapperSHA256,
+		ArgsSHA256:     metaC.ArgsSHA256,
+		LaTeXMLBin:     metaC.LaTeXMLBin,
+		LaTeXMLVersion: metaC.LaTeXMLVersion,
+		RawHTML:        rawC,
+	})
+	metaB, _ := runner.cacheMeta(rawB)
+	if _, ok := runner.CacheStore.get(metaB, rawB); ok {
+		t.Fatal("B should have been evicted after A was promoted")
+	}
+	if _, ok := runner.CacheStore.get(metaA, rawA); !ok {
+		t.Fatal("A should remain after LRU promotion")
+	}
+}
+
+func TestWriteCacheDoesNotOverwriteValidExistingCache(t *testing.T) {
+	runner := Runner{Bin: fakeLateXMLBin(t), CacheDir: t.TempDir(), CacheStore: NewCacheStore(8)}
+	raw := `\begin{tabular}{c}A\end{tabular}`
+	first := `<html><body>first</body></html>`
+	second := `<html><body>second</body></html>`
+	runner.writeCache(raw, first)
+	runner.writeCache(raw, second)
+	got, ok := runner.readCache(raw)
+	if !ok {
+		t.Fatal("expected cache hit")
+	}
+	if got != first {
+		t.Fatalf("valid existing cache was overwritten: %q", got)
+	}
+}
+
 func TestLateXMLVersionFallsBackToUppercaseOption(t *testing.T) {
 	bin := fakeLateXMLBinWithVersionOption(t, "--VERSION")
 	version, ok := lateXMLVersion(bin)

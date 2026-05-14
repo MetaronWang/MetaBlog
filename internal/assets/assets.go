@@ -6,11 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"MetaBlog/internal/latex/ast"
+	"MetaBlog/internal/pathutil"
 )
 
 type MemoryStore interface {
@@ -45,6 +48,8 @@ type StatsSnapshot struct {
 	PDFConverted int
 	Skipped      int
 }
+
+var inkscapeVersionCache sync.Map
 
 func (c Converter) Process(doc *ast.Document) error {
 	if c.Skip {
@@ -107,8 +112,15 @@ func figureImages(fig *ast.Figure) []*ast.Image {
 }
 
 func (c Converter) convert(src string) (string, error) {
-	clean := strings.TrimPrefix(filepath.ToSlash(src), "./")
-	sourcePath := filepath.Clean(filepath.Join(c.SourceRoot, filepath.FromSlash(clean)))
+	cleanNative, err := pathutil.CleanRelativePath(src)
+	if err != nil {
+		return "", fmt.Errorf("asset path not allowed %s: %w", src, err)
+	}
+	clean := filepath.ToSlash(cleanNative)
+	sourcePath := filepath.Clean(filepath.Join(c.SourceRoot, cleanNative))
+	if !pathutil.IsWithinDir(c.SourceRoot, sourcePath) {
+		return "", fmt.Errorf("asset path escapes source root: %s", src)
+	}
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
 		return "", fmt.Errorf("asset not found %s: %w", src, err)
@@ -230,13 +242,47 @@ func convertPDF(src, dst string) error {
 		return validateOutput(dst)
 	}
 	if bin, err := exec.LookPath("inkscape"); err == nil {
-		cmd := exec.Command(bin, src, "--export-type=svg", "--export-filename="+dst)
+		cmd := exec.Command(bin, inkscapeArgs(bin, src, dst)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("inkscape: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		return validateOutput(dst)
 	}
 	return fmt.Errorf("no PDF to SVG converter found")
+}
+
+func inkscapeArgs(bin, src, dst string) []string {
+	version := inkscapeMajorVersion(bin)
+	if version >= 1 {
+		return []string{src, "--export-type=svg", "--export-filename=" + dst}
+	}
+	return []string{src, "--export-type=svg", "--export-file=" + dst}
+}
+
+func inkscapeMajorVersion(bin string) int {
+	if cached, ok := inkscapeVersionCache.Load(bin); ok {
+		return cached.(int)
+	}
+	version := detectInkscapeMajorVersion(bin)
+	inkscapeVersionCache.Store(bin, version)
+	return version
+}
+
+func detectInkscapeMajorVersion(bin string) int {
+	cmd := exec.Command(bin, "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		return -1
+	}
+	match := regexp.MustCompile(`Inkscape\s+(\d+)`).FindStringSubmatch(string(out))
+	if len(match) < 2 {
+		return -1
+	}
+	version, err := strconv.Atoi(match[1])
+	if err != nil {
+		return -1
+	}
+	return version
 }
 
 func convertPDFToBytes(src string) ([]byte, error) {

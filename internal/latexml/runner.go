@@ -60,6 +60,17 @@ func (c *CacheStore) get(meta cacheMeta, raw string) (string, bool) {
 	if !ok || !cacheEntryMatches(entry, meta, raw) {
 		return "", false
 	}
+	c.mu.Lock()
+	if current, stillExists := c.data[meta.Key]; stillExists && cacheEntryMatches(current, meta, raw) {
+		for i, key := range c.order {
+			if key == meta.Key {
+				c.order = append(c.order[:i], c.order[i+1:]...)
+				c.order = append(c.order, meta.Key)
+				break
+			}
+		}
+	}
+	c.mu.Unlock()
 	return entry.RawHTML, true
 }
 
@@ -269,6 +280,8 @@ func (r Runner) convertWithLateXML(raw string) (string, error) {
 	}
 	if !r.KeepTemp {
 		defer os.RemoveAll(tempDir)
+	} else {
+		r.logf("LaTeXML temp kept: %s\n", filepath.ToSlash(tempDir))
 	}
 	texPath := filepath.Join(tempDir, "fragment.tex")
 	htmlPath := filepath.Join(tempDir, "fragment.html")
@@ -357,11 +370,15 @@ func (r Runner) writeCache(raw, rawHTML string) {
 		RawHTML:        rawHTML,
 	}
 	r.CacheStore.set(entry)
+	target := filepath.Join(r.CacheDir, meta.Key+".json")
+	if existing, ok := r.readCacheEntryFile(target, meta, raw); ok {
+		r.CacheStore.set(existing)
+		return
+	}
 	b, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return
 	}
-	target := filepath.Join(r.CacheDir, meta.Key+".json")
 	tmp, err := os.CreateTemp(r.CacheDir, meta.Key+".*.tmp")
 	if err != nil {
 		return
@@ -373,12 +390,37 @@ func (r Runner) writeCache(raw, rawHTML string) {
 		os.Remove(tmpPath)
 		return
 	}
-	if err := os.Rename(tmpPath, target); err != nil {
-		_ = os.Remove(target)
-		if err := os.Rename(tmpPath, target); err != nil {
+	if _, err := os.Stat(target); err == nil {
+		if existing, ok := r.readCacheEntryFile(target, meta, raw); ok {
+			r.CacheStore.set(existing)
 			os.Remove(tmpPath)
+			return
 		}
+		_ = os.Remove(target)
 	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		if existing, ok := r.readCacheEntryFile(target, meta, raw); ok {
+			r.CacheStore.set(existing)
+			os.Remove(tmpPath)
+			return
+		}
+		os.Remove(tmpPath)
+	}
+}
+
+func (r Runner) readCacheEntryFile(path string, meta cacheMeta, raw string) (cacheEntry, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return cacheEntry{}, false
+	}
+	var entry cacheEntry
+	if err := json.Unmarshal(b, &entry); err != nil {
+		return cacheEntry{}, false
+	}
+	if !cacheEntryMatches(entry, meta, raw) {
+		return cacheEntry{}, false
+	}
+	return entry, true
 }
 
 type cacheMeta struct {

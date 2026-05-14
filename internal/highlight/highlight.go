@@ -3,6 +3,7 @@ package highlight
 import (
 	"bytes"
 	"strings"
+	"sync"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters/html"
@@ -17,27 +18,36 @@ const (
 	DefaultTheme = "monokai"
 )
 
-// Highlight returns syntax-highlighted HTML for the given code and language.
-// The language name is case-insensitive. Unrecognized languages fall back to plain text.
-// Returns only the inner highlighted content (no wrapping pre/code tags).
-func Highlight(code, language string) string {
-	lexer := lexerForLanguage(language)
-	if lexer == nil {
-		lexer = lexers.Fallback
-	}
-	lexer = chroma.Coalesce(lexer)
+var (
+	cacheOnce       sync.Once
+	cachedStyle     *chroma.Style
+	cachedFormatter *html.Formatter
+)
 
+func initCache() {
 	style := styles.Get(DefaultTheme)
 	if style == nil {
 		style = styles.Fallback
 	}
-
-	formatter := html.New(
+	cachedStyle = style
+	cachedFormatter = html.New(
 		html.WithClasses(true),
 		html.WithLineNumbers(false),
 		html.TabWidth(4),
 		html.ClassPrefix(CSSPrefix),
 	)
+}
+
+// Highlight returns syntax-highlighted HTML for the given code and language.
+// The language name is case-insensitive. Unrecognized languages fall back to plain text.
+// Returns only the inner highlighted content (no wrapping pre/code tags).
+func Highlight(code, language string) string {
+	cacheOnce.Do(initCache)
+	lexer := lexerForLanguage(language)
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
 
 	iterator, err := lexer.Tokenise(nil, code)
 	if err != nil {
@@ -45,7 +55,7 @@ func Highlight(code, language string) string {
 	}
 
 	var buf bytes.Buffer
-	if err := formatter.Format(&buf, style, iterator); err != nil {
+	if err := cachedFormatter.Format(&buf, cachedStyle, iterator); err != nil {
 		return escapeHTML(code)
 	}
 	raw := buf.String()
@@ -75,18 +85,10 @@ func lexerForLanguage(language string) chroma.Lexer {
 
 // ThemeCSS returns the CSS rules for the current chroma theme, scoped with CSSPrefix.
 func ThemeCSS() string {
-	style := styles.Get(DefaultTheme)
-	if style == nil {
-		style = styles.Fallback
-	}
-
-	formatter := html.New(
-		html.WithClasses(true),
-		html.ClassPrefix(CSSPrefix),
-	)
+	cacheOnce.Do(initCache)
 
 	var buf bytes.Buffer
-	if err := formatter.WriteCSS(&buf, style); err != nil {
+	if err := cachedFormatter.WriteCSS(&buf, cachedStyle); err != nil {
 		return ""
 	}
 	return buf.String()

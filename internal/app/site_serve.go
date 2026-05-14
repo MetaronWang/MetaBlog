@@ -14,6 +14,7 @@ import (
 
 	"MetaBlog/internal/blog"
 	"MetaBlog/internal/latexml"
+	"MetaBlog/internal/pathutil"
 )
 
 type SiteServeConfig struct {
@@ -153,14 +154,10 @@ func loadSiteForWatch(cfg SiteServeConfig, outDir string, store *memStore) (*blo
 	return siteData, buildCfg, nil
 }
 
-func loadPreparedSiteForWatch(rootDir, outDir, siteConfig, articlesFile string, stores ...*memStore) (*blog.Site, error) {
+func loadPreparedSiteForWatch(rootDir, outDir, siteConfig, articlesFile string, store *memStore) (*blog.Site, error) {
 	siteData, err := blog.Load(rootDir, siteConfig, articlesFile)
 	if err != nil {
 		return nil, err
-	}
-	var store *memStore
-	if len(stores) > 0 {
-		store = stores[0]
 	}
 	if store != nil {
 		if err := prepareSiteAssetsInMemory(rootDir, store, &siteData.Config); err != nil {
@@ -189,11 +186,14 @@ func prepareSiteAssetsInMemory(rootDir string, store *memStore, cfg *blog.Config
 }
 
 func copyConfiguredSiteAssetToMemory(rootDir string, store *memStore, rel string) (string, error) {
-	rel = strings.Trim(strings.TrimSpace(filepath.ToSlash(rel)), "/")
-	if rel == "" {
+	cleanRel, err := pathutil.CleanRelativePath(rel)
+	if err != nil {
+		return "", fmt.Errorf("site asset path not allowed %s: %w", rel, err)
+	}
+	if cleanRel == "" {
 		return "", nil
 	}
-	src := filepath.Join(rootDir, "asset", filepath.FromSlash(rel))
+	src := filepath.Join(rootDir, "asset", cleanRel)
 	info, err := os.Stat(src)
 	if err != nil {
 		return "", fmt.Errorf("site asset not found %s: %w", rel, err)
@@ -205,7 +205,7 @@ func copyConfiguredSiteAssetToMemory(rootDir string, store *memStore, rel string
 	if err != nil {
 		return "", err
 	}
-	outRel := filepath.ToSlash(filepath.Join("assets", "site", filepath.FromSlash(rel)))
+	outRel := filepath.ToSlash(filepath.Join("assets", "site", cleanRel))
 	store.PutFile(outRel, data, info.ModTime())
 	return outRel, nil
 }

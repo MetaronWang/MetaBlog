@@ -199,3 +199,39 @@ func TestDocumentOutputsFreshUsesHTMLOutputTime(t *testing.T) {
 		t.Fatal("expected fresh document when HTML is newer than sources, even if an unchanged asset output is older")
 	}
 }
+
+func TestCopyConfiguredSiteAssetRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	outDir := filepath.Join(dir, "out")
+	if err := os.MkdirAll(filepath.Join(dir, "asset"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyConfiguredSiteAsset(dir, outDir, "../secret.txt"); err == nil {
+		t.Fatal("expected path traversal to be rejected")
+	}
+	store := newMemStore()
+	if _, err := copyConfiguredSiteAssetToMemory(dir, store, "../secret.txt"); err == nil {
+		t.Fatal("expected in-memory path traversal to be rejected")
+	}
+}
+
+func TestCopyConfiguredSiteAssetUsesCleanRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	outDir := filepath.Join(dir, "out")
+	if err := os.MkdirAll(filepath.Join(dir, "asset", "figs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "asset", "logo.svg"), []byte("<svg/>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := copyConfiguredSiteAsset(dir, outDir, "figs/../logo.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "assets/site/logo.svg" {
+		t.Fatalf("unexpected output path: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "assets", "site", "logo.svg")); err != nil {
+		t.Fatal(err)
+	}
+}

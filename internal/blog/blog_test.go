@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -160,6 +161,53 @@ func TestLoadFiltersDeletedArticles(t *testing.T) {
 	}
 	if len(site.Articles) != 1 || site.Articles[0].Title != "Visible" {
 		t.Fatalf("deleted articles were not filtered: %#v", site.Articles)
+	}
+}
+
+func TestLoadRejectsArticlePathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	for name, toml := range map[string]string{
+		"folder": `[[articles]]
+title = "Bad"
+folder = "../outside"
+main_file = "main.tex"
+`,
+		"main_file": `[[articles]]
+title = "Bad"
+folder = "articles/bad"
+main_file = "../main.tex"
+`,
+		"main_fig": `[[articles]]
+title = "Bad"
+folder = "articles/bad"
+main_file = "main.tex"
+main_fig = "../fig.png"
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(dir, name+".toml")
+			if err := os.WriteFile(path, []byte(toml), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Load(dir, "", path); err == nil {
+				t.Fatal("expected path traversal to be rejected")
+			}
+		})
+	}
+}
+
+func TestLoadAllowsAbsoluteCLIDataPath(t *testing.T) {
+	dir := t.TempDir()
+	articlesPath := filepath.Join(dir, "articles.toml")
+	if err := SaveArticles(articlesPath, []Article{{Title: "Visible", Folder: "articles/visible", MainFile: "main.tex"}}); err != nil {
+		t.Fatal(err)
+	}
+	site, err := Load(dir, "", articlesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(site.Articles) != 1 {
+		t.Fatalf("expected one article, got %d", len(site.Articles))
 	}
 }
 

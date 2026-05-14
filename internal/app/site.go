@@ -12,6 +12,7 @@ import (
 
 	"MetaBlog/internal/assets"
 	"MetaBlog/internal/blog"
+	"MetaBlog/internal/pathutil"
 	"MetaBlog/internal/render"
 	"MetaBlog/internal/site"
 )
@@ -129,15 +130,18 @@ func prepareSiteAssets(rootDir, outDir string, cfg *blog.Config) error {
 }
 
 func copyConfiguredSiteAsset(rootDir, outDir, rel string) (string, error) {
-	rel = strings.Trim(strings.TrimSpace(filepath.ToSlash(rel)), "/")
-	if rel == "" {
+	cleanRel, err := pathutil.CleanRelativePath(rel)
+	if err != nil {
+		return "", fmt.Errorf("site asset path not allowed %s: %w", rel, err)
+	}
+	if cleanRel == "" {
 		return "", nil
 	}
-	src := filepath.Join(rootDir, "asset", filepath.FromSlash(rel))
+	src := filepath.Join(rootDir, "asset", cleanRel)
 	if _, err := os.Stat(src); err != nil {
 		return "", fmt.Errorf("site asset not found %s: %w", rel, err)
 	}
-	outRel := filepath.ToSlash(filepath.Join("assets", "site", filepath.FromSlash(rel)))
+	outRel := filepath.ToSlash(filepath.Join("assets", "site", cleanRel))
 	dst := filepath.Join(outDir, filepath.FromSlash(outRel))
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return "", err

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"MetaBlog/internal/pathutil"
 )
 
 const liveReloadEndpoint = "/__metablog_live_reload"
@@ -111,7 +113,7 @@ func (h liveReloadHandler) readHTML(urlPath string) (string, bool) {
 		return "", false
 	}
 	cleanPath, err := filepath.Abs(path)
-	if err != nil || !isWithinDir(cleanOut, cleanPath) {
+	if err != nil || !pathutil.IsWithinDir(cleanOut, cleanPath) {
 		return "", false
 	}
 	info, err := os.Stat(cleanPath)
@@ -172,12 +174,4 @@ func normalizeReloadPath(path string) string {
 
 func isHTMLContent(path, contentType string) bool {
 	return strings.Contains(strings.ToLower(contentType), "text/html") || strings.EqualFold(filepath.Ext(path), ".html") || strings.HasSuffix(path, "/")
-}
-
-func isWithinDir(root, path string) bool {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." && !filepath.IsAbs(rel))
 }

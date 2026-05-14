@@ -5,7 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"MetaBlog/internal/pathutil"
 )
 
 type CacheCLIConfig struct {
@@ -50,11 +51,7 @@ func validateCacheDir(root, cacheDir string) error {
 	if filepath.Base(cacheDir) != ".metablog-cache" {
 		return fmt.Errorf("refusing to remove non-cache directory: %s", cacheDir)
 	}
-	rel, err := filepath.Rel(root, cacheDir)
-	if err != nil {
-		return err
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	if !pathutil.IsWithinDir(root, cacheDir) {
 		return fmt.Errorf("refusing to remove cache outside root: %s", cacheDir)
 	}
 	return nil

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"MetaBlog/internal/pathutil"
+
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -53,22 +55,27 @@ const (
 	DefaultArticleListPageSize = 20
 )
 
+var dateOnlyRE = regexp.MustCompile(`^\d{4}$`)
+
 func Load(rootDir, configPath, articlesPath string) (*Site, error) {
 	cfg := Config{Title: "MetaBlog"}
 	if configPath != "" {
-		if err := readData(resolvePath(rootDir, configPath), &cfg); err != nil {
+		if err := readData(resolveUserPath(rootDir, configPath), &cfg); err != nil {
 			return nil, err
 		}
 	}
 	cfg.normalize()
 	var articles []Article
 	if articlesPath != "" {
-		if err := readData(resolvePath(rootDir, articlesPath), &articles); err != nil {
+		if err := readData(resolveUserPath(rootDir, articlesPath), &articles); err != nil {
 			return nil, err
 		}
 	}
 	for i := range articles {
 		articles[i].normalize()
+		if err := validateArticlePaths(rootDir, articles[i]); err != nil {
+			return nil, err
+		}
 	}
 	articles = ActiveArticles(articles)
 	sortArticles(articles)
@@ -77,8 +84,8 @@ func Load(rootDir, configPath, articlesPath string) (*Site, error) {
 
 func (c *Config) normalize() {
 	c.Title = strings.TrimSpace(c.Title)
-	c.Logo = strings.Trim(strings.TrimSpace(filepath.ToSlash(c.Logo)), "/")
-	c.Icon = strings.Trim(strings.TrimSpace(filepath.ToSlash(c.Icon)), "/")
+	c.Logo = strings.TrimSpace(filepath.ToSlash(c.Logo))
+	c.Icon = strings.TrimSpace(filepath.ToSlash(c.Icon))
 	if c.Title == "" {
 		c.Title = "MetaBlog"
 	}
@@ -185,11 +192,41 @@ func marshalData(path string, v any) ([]byte, error) {
 	return b, nil
 }
 
-func resolvePath(rootDir, path string) string {
+func resolveUserPath(rootDir, path string) string {
 	if filepath.IsAbs(path) {
-		return path
+		return filepath.Clean(path)
 	}
 	return filepath.Clean(filepath.Join(rootDir, filepath.FromSlash(path)))
+}
+
+func resolveArticlePath(rootDir, path string) (string, error) {
+	clean, err := pathutil.CleanRelativePath(path)
+	if err != nil {
+		return "", err
+	}
+	result := filepath.Clean(filepath.Join(rootDir, clean))
+	if !pathutil.IsWithinDir(rootDir, result) {
+		return "", fmt.Errorf("path escapes root directory: %s", path)
+	}
+	return result, nil
+}
+
+func validateArticlePaths(rootDir string, a Article) error {
+	folder, err := resolveArticlePath(rootDir, a.Folder)
+	if err != nil {
+		return fmt.Errorf("article %s folder: %w", a.Title, err)
+	}
+	if a.MainFile != "" {
+		if _, err := resolveArticlePath(folder, a.MainFile); err != nil {
+			return fmt.Errorf("article %s main_file: %w", a.Title, err)
+		}
+	}
+	if a.MainFig != "" {
+		if _, err := pathutil.CleanRelativePath(a.MainFig); err != nil {
+			return fmt.Errorf("article %s main_fig: %w", a.Title, err)
+		}
+	}
+	return nil
 }
 
 func (a *Article) normalize() {
@@ -197,10 +234,10 @@ func (a *Article) normalize() {
 	a.Description = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(a.Description, "\r\n", "\n"), "\r", "\n"))
 	a.Author = strings.TrimSpace(a.Author)
 	a.Date = strings.TrimSpace(a.Date)
-	a.Folder = strings.Trim(strings.TrimSpace(filepath.ToSlash(a.Folder)), "/")
-	a.MainFig = strings.Trim(strings.TrimSpace(filepath.ToSlash(a.MainFig)), "/")
-	a.MainFile = strings.Trim(strings.TrimSpace(filepath.ToSlash(a.MainFile)), "/")
-	a.Input = strings.Trim(strings.TrimSpace(filepath.ToSlash(a.Input)), "/")
+	a.Folder = strings.TrimSpace(filepath.ToSlash(a.Folder))
+	a.MainFig = strings.TrimSpace(filepath.ToSlash(a.MainFig))
+	a.MainFile = strings.TrimSpace(filepath.ToSlash(a.MainFile))
+	a.Input = strings.TrimSpace(filepath.ToSlash(a.Input))
 	if a.MainFile == "" && a.Input != "" {
 		a.MainFile = a.Input
 	}
@@ -246,9 +283,12 @@ func sortArticles(articles []Article) {
 }
 
 func ResolveArticleInput(rootDir string, a Article) (string, error) {
-	folder := resolvePath(rootDir, a.Folder)
+	folder, err := resolveArticlePath(rootDir, a.Folder)
+	if err != nil {
+		return "", err
+	}
 	if a.MainFile != "" {
-		return resolvePath(folder, a.MainFile), nil
+		return resolveArticlePath(folder, a.MainFile)
 	}
 	candidates := []string{"main.tex", "index.tex", "article.tex"}
 	for _, name := range candidates {
@@ -516,10 +556,6 @@ func RenderCategoryPagePage(cfg Config, categoryPath []string, articles []Articl
 	return renderArticleCollectionPage(cfg, articlesInCategory(articles, categoryPath), basePrefix, title, page, func(page int) string {
 		return CategoryPageURL(categoryPath, page)
 	})
-}
-
-func RenderAbout(cfg Config) string {
-	return RenderShell(cfg, "..", "关于", "<h1>关于</h1>")
 }
 
 func Tags(articles []Article) []string {
@@ -850,7 +886,7 @@ func parseDate(s string) (time.Time, bool) {
 
 func monthDay(s string) string {
 	if t, ok := parseDate(s); ok {
-		if t.Month() == time.January && t.Day() == 1 && regexp.MustCompile(`^\d{4}$`).MatchString(strings.TrimSpace(s)) {
+		if t.Month() == time.January && t.Day() == 1 && dateOnlyRE.MatchString(strings.TrimSpace(s)) {
 			return ""
 		}
 		return t.Format("01-02")

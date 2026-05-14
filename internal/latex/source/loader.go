@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"MetaBlog/internal/latex/lexer"
 )
 
 type Loaded struct {
@@ -22,13 +24,21 @@ func Load(input string) (*Loaded, error) {
 	seen := map[string]int{}
 	active := map[string]bool{}
 	rootDir := filepath.Dir(abs)
-	text, warnings, err := loadFile(abs, rootDir, seen, active)
+	b, err := os.ReadFile(abs)
 	if err != nil {
 		return nil, err
 	}
-	doc, ok := extractDocument(text)
+	raw := string(b)
+	bodyStart, bodyEnd, ok := locateDocumentBounds(raw, lexer.Tokenize(raw))
 	if !ok {
 		return nil, fmt.Errorf("missing \\begin{document} or \\end{document} in %s", input)
+	}
+	seen[abs]++
+	active[abs] = true
+	doc, warnings, err := parseAndExpandSource(raw[bodyStart:bodyEnd], rootDir, rootDir, seen, active)
+	delete(active, abs)
+	if err != nil {
+		return nil, err
 	}
 	return &Loaded{
 		InputFile: abs,
@@ -36,6 +46,58 @@ func Load(input string) (*Loaded, error) {
 		Document:  doc,
 		Warnings:  warnings,
 	}, nil
+}
+
+func locateDocumentBounds(raw string, tokens []lexer.Token) (int, int, bool) {
+	for i := 0; i < len(tokens); i++ {
+		tok := tokens[i]
+		if tok.Kind == lexer.EOF {
+			break
+		}
+		if tok.Kind != lexer.Command || tok.Value != "begin" {
+			continue
+		}
+		argIdx := nextNonSpaceToken(tokens, i+1)
+		name, next, ok := readTokenGroup(raw, tokens, argIdx)
+		if !ok || strings.TrimSpace(name) != "document" {
+			continue
+		}
+		bodyStart := tokens[next-1].End
+		for j := next; j < len(tokens); j++ {
+			endTok := tokens[j]
+			if endTok.Kind == lexer.EOF {
+				break
+			}
+			if endTok.Kind != lexer.Command || endTok.Value != "end" {
+				continue
+			}
+			endArgIdx := nextNonSpaceToken(tokens, j+1)
+			endName, _, ok := readTokenGroup(raw, tokens, endArgIdx)
+			if ok && strings.TrimSpace(endName) == "document" {
+				return bodyStart, endTok.Start, true
+			}
+		}
+		return 0, 0, false
+	}
+	return 0, 0, false
+}
+
+func nextNonSpaceToken(tokens []lexer.Token, i int) int {
+	for i < len(tokens) {
+		tok := tokens[i]
+		switch tok.Kind {
+		case lexer.Comment:
+			i++
+			continue
+		case lexer.Text:
+			if strings.TrimSpace(tok.Value) == "" {
+				i++
+				continue
+			}
+		}
+		return i
+	}
+	return i
 }
 
 func loadFile(path, rootDir string, seen map[string]int, active map[string]bool) (string, []string, error) {

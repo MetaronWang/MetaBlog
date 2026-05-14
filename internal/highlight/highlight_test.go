@@ -2,6 +2,7 @@ package highlight
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -82,4 +83,19 @@ func TestThemeCSSContainsMonokaiRules(t *testing.T) {
 	if !strings.Contains(css, "{") {
 		t.Fatal("CSS should contain style rules")
 	}
+}
+
+func TestHighlightConcurrentUse(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := Highlight("package main\nfunc main() {}\n", "go")
+			if !strings.Contains(got, "main") {
+				t.Errorf("highlight output missing code: %s", got)
+			}
+		}()
+	}
+	wg.Wait()
 }

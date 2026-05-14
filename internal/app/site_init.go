@@ -194,6 +194,7 @@ func gitignoreContains(text, line string) bool {
 
 func downloadSiteFonts(cfg SiteInitConfig) error {
 	fontDir := filepath.Join(cfg.RootDir, "web", "static", "fonts")
+	_ = cleanupDownloadTemps(fontDir)
 	for _, font := range cfg.FontFiles {
 		if strings.TrimSpace(font.Name) == "" || strings.TrimSpace(font.URL) == "" {
 			return errors.New("font download entry requires name and URL")
@@ -215,6 +216,21 @@ func downloadSiteFonts(cfg SiteInitConfig) error {
 }
 
 func downloadFile(client *http.Client, url, dst string) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*attempt) * 200 * time.Millisecond)
+		}
+		if err := downloadFileOnce(client, url, dst); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func downloadFileOnce(client *http.Client, url, dst string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -232,11 +248,11 @@ func downloadFile(client *http.Client, url, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
-	tmp := dst + ".download"
-	out, err := os.Create(tmp)
+	out, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".*.download")
 	if err != nil {
 		return err
 	}
+	tmp := out.Name()
 	_, copyErr := io.Copy(out, resp.Body)
 	closeErr := out.Close()
 	if copyErr != nil {
@@ -258,6 +274,17 @@ func downloadFile(client *http.Client, url, dst string) error {
 	}
 	_ = os.Remove(dst)
 	return os.Rename(tmp, dst)
+}
+
+func cleanupDownloadTemps(dir string) error {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.download"))
+	if err != nil {
+		return err
+	}
+	for _, match := range matches {
+		_ = os.Remove(match)
+	}
+	return nil
 }
 
 func checkSiteEnvironment(cfg SiteInitConfig) {

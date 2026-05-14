@@ -24,6 +24,22 @@ type watchState struct {
 	rebuildRequest  chan struct{}
 	rebuildDebounce time.Duration
 	liveReload      *liveReloadState
+	generation      uint64
+	dirtyReasons    map[string]struct{}
+}
+
+type watchSnapshot struct {
+	cfg      Config
+	siteData *blog.Site
+	lastMod  map[string]time.Time
+}
+
+type watchChange struct {
+	key     string
+	path    string
+	what    string
+	latest  time.Time
+	changed bool
 }
 
 func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}, store *memStore, liveReload *liveReloadState) {
@@ -36,9 +52,10 @@ func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan st
 		sitePageKeys:    sitePageKeys(siteData),
 		articlePageKeys: articlePageKeys(siteData),
 		changes:         make(chan string, 16),
-		rebuildRequest:  make(chan struct{}, 1),
+		rebuildRequest:  make(chan struct{}, 2),
 		rebuildDebounce: 300 * time.Millisecond,
 		liveReload:      liveReload,
+		dirtyReasons:    make(map[string]struct{}),
 	}
 
 	cfg.logf("Watch: monitoring %d article(s) and about page for changes\n", len(siteData.Articles))
@@ -63,64 +80,147 @@ func (s *watchState) poll(stop <-chan struct{}) {
 }
 
 func (s *watchState) scan() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	snap := s.snapshot()
 
-	if strings.TrimSpace(s.cfg.ArticlesFile) != "" {
-		articlesPath := filepath.Join(s.cfg.RootDir, s.cfg.ArticlesFile)
-		if s.changed("articles_config", articlesPath) {
-			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile, s.store)
-			if err != nil {
-				s.cfg.logf("Watch: reload site data failed: %v\n", err)
-				return
+	var changes []watchChange
+	siteDataChanged := false
+	if strings.TrimSpace(snap.cfg.ArticlesFile) != "" {
+		articlesPath := resolveWatchPath(snap.cfg.RootDir, snap.cfg.ArticlesFile)
+		change := s.detectChange(snap, "articles_config", articlesPath, "articles config changed")
+		siteDataChanged = siteDataChanged || change.changed
+		changes = append(changes, change)
+	}
+
+	if strings.TrimSpace(snap.cfg.SiteConfig) != "" {
+		configPath := resolveWatchPath(snap.cfg.RootDir, snap.cfg.SiteConfig)
+		change := s.detectChange(snap, "site_config", configPath, "site config changed")
+		siteDataChanged = siteDataChanged || change.changed
+		changes = append(changes, change)
+	}
+
+	aboutDir := filepath.Join(snap.cfg.RootDir, "data", "about_page")
+	changes = append(changes, s.detectChange(snap, "about_page_dir", aboutDir, "about page"))
+
+	if snap.siteData != nil {
+		for _, article := range snap.siteData.Articles {
+			sourceDir := filepath.Join(snap.cfg.RootDir, filepath.FromSlash(article.Folder))
+			if sourceDir == "" {
+				continue
 			}
-			s.siteData = newData
-			s.requestRebuild("articles config changed")
+			slug := blog.Slugify(article.Slug)
+			key := "article_" + slug
+			changes = append(changes, s.detectChange(snap, key, sourceDir, "article:"+slug))
 		}
 	}
 
-	if strings.TrimSpace(s.cfg.SiteConfig) != "" {
-		configPath := filepath.Join(s.cfg.RootDir, s.cfg.SiteConfig)
-		if s.changed("site_config", configPath) {
-			newData, err := loadPreparedSiteForWatch(s.cfg.RootDir, s.outDir, s.cfg.SiteConfig, s.cfg.ArticlesFile, s.store)
-			if err != nil {
-				s.cfg.logf("Watch: reload site data failed: %v\n", err)
-				return
-			}
-			s.siteData = newData
-			s.requestRebuild("site config changed")
+	var newData *blog.Site
+	if siteDataChanged {
+		data, err := loadPreparedSiteForWatch(snap.cfg.RootDir, s.outDir, snap.cfg.SiteConfig, snap.cfg.ArticlesFile, s.store)
+		if err != nil {
+			snap.cfg.logf("Watch: reload site data failed: %v\n", err)
+			return
 		}
+		newData = data
 	}
-
-	aboutDir := filepath.Join(s.cfg.RootDir, "data", "about_page")
-	if s.changed("about_page_dir", aboutDir) {
-		s.requestRebuild("about page")
-	}
-
-	for _, article := range s.siteData.Articles {
-		sourceDir := filepath.Join(s.cfg.RootDir, filepath.FromSlash(article.Folder))
-		if sourceDir == "" {
-			continue
-		}
-		slug := blog.Slugify(article.Slug)
-		key := "article_" + slug
-		if s.changed(key, sourceDir) {
-			s.requestRebuild("article:" + slug)
-		}
+	reasons := s.applyChanges(changes, newData)
+	for _, reason := range reasons {
+		s.requestRebuild(reason)
 	}
 }
 
-func (s *watchState) changed(key, path string) bool {
+func (s *watchState) snapshot() watchSnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lastMod := make(map[string]time.Time, len(s.lastMod))
+	for k, v := range s.lastMod {
+		lastMod[k] = v
+	}
+	return watchSnapshot{cfg: s.cfg, siteData: s.siteData, lastMod: lastMod}
+}
+
+func resolveWatchPath(rootDir, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(rootDir, filepath.FromSlash(path))
+}
+
+func (s *watchState) detectChange(snap watchSnapshot, key, path, what string) watchChange {
 	latest, hasFiles, err := latestFileModTime(path)
 	if err != nil || !hasFiles {
-		return false
+		return watchChange{key: key, path: path, what: what}
 	}
-	prev, exists := s.lastMod[key]
-	s.lastMod[key] = latest
-	if !exists {
-		return false
+	prev, exists := snap.lastMod[key]
+	return watchChange{
+		key:     key,
+		path:    path,
+		what:    what,
+		latest:  latest,
+		changed: exists && latest.After(prev),
 	}
-	return latest.After(prev)
+}
+
+func (s *watchState) applyChanges(changes []watchChange, newData *blog.Site) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if newData != nil {
+		s.siteData = newData
+	}
+	var reasons []string
+	for _, change := range changes {
+		if change.latest.IsZero() {
+			continue
+		}
+		prev, exists := s.lastMod[change.key]
+		s.lastMod[change.key] = change.latest
+		if !change.changed || !exists || !change.latest.After(prev) {
+			continue
+		}
+		if _, ok := s.dirtyReasons[change.what]; !ok {
+			reasons = append(reasons, change.what)
+		}
+		s.dirtyReasons[change.what] = struct{}{}
+	}
+	if len(reasons) > 0 {
+		s.generation++
+	}
+	return reasons
+}
+
+func (s *watchState) beginRebuild(pending []string) (*blog.Site, []string, uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := make(map[string]struct{}, len(pending)+len(s.dirtyReasons))
+	merged := make([]string, 0, len(pending)+len(s.dirtyReasons))
+	for _, reason := range pending {
+		if _, ok := seen[reason]; ok {
+			continue
+		}
+		seen[reason] = struct{}{}
+		merged = append(merged, reason)
+	}
+	for reason := range s.dirtyReasons {
+		if _, ok := seen[reason]; ok {
+			continue
+		}
+		seen[reason] = struct{}{}
+		merged = append(merged, reason)
+	}
+	return s.siteData, merged, s.generation
+}
+
+func (s *watchState) finishRebuild(startGeneration uint64, processed []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.generation == startGeneration {
+		for _, reason := range processed {
+			delete(s.dirtyReasons, reason)
+		}
+		return
+	}
+	for reason := range s.dirtyReasons {
+		s.requestRebuild(reason)
+	}
 }
 
 func (s *watchState) requestRebuild(what string) {
@@ -145,7 +245,10 @@ func (s *watchState) debouncedRebuild(stop <-chan struct{}) {
 			pending = append(pending, what)
 			if timer == nil {
 				timer = time.AfterFunc(s.rebuildDebounce, func() {
-					s.rebuildRequest <- struct{}{}
+					select {
+					case s.rebuildRequest <- struct{}{}:
+					default:
+					}
 				})
 			} else {
 				timer.Reset(s.rebuildDebounce)
@@ -165,9 +268,8 @@ func (s *watchState) debouncedRebuild(stop <-chan struct{}) {
 }
 
 func (s *watchState) executeRebuild(pending []string) {
-	s.mu.Lock()
-	siteData := s.siteData
-	s.mu.Unlock()
+	siteData, pending, startGeneration := s.beginRebuild(pending)
+	defer s.finishRebuild(startGeneration, pending)
 
 	rebuildIndex := false
 	rebuildAbout := false
