@@ -38,7 +38,7 @@ MetaBlog 对 LaTeX 的支持分为三类：
 | 公式 | `$...$`、`\(...\)`、`\[...\]`、`$$...$$`、`equation`、`align`、`aligned` 等 | 支持边界、编号和 KaTeX 渲染。 |
 | 文本样式 | 粗体、斜体、颜色、字号、对齐声明等 | 支持常见命令。 |
 | 链接 | `\url`、`\href` | 支持，危险协议降级。 |
-| 原样文本 | `verbatim`、`lstlisting`、`minted`、`\verb`、`html`、`\importHTML` | 代码环境支持为代码文本框；`html` 和 `\importHTML` 原样输出。 |
+| 原样文本 | `verbatim`、`lstlisting`、`minted`、`\verb`、`html`、`\importHTML`、`\inputHTML` | 代码环境支持为代码文本框；`html`、`\importHTML` 和 `\inputHTML` 原样输出。 |
 | 自定义框 | `tcb` | 支持可折叠标题文本框。 |
 | 条件编译 | `\iffalse...\fi` | 暂不支持。 |
 | 宏展开 | `\newcommand`、`\def` 等 | 暂不支持完整宏展开。 |
@@ -78,12 +78,13 @@ MetaBlog 只处理：
 8. `\includegraphics` 不会被误识别为 `\include`。
 9. 原样环境、`html` 环境和 `\verb` 内部的 input/include 不会展开。
 
-### 3.3 `\importHTML{...}`
+### 3.3 `\importHTML{...}` 和 `\inputHTML{...}`
 
 `\importHTML{...}` 用于显式导入外部 HTML 片段：
 
 ```latex
 \importHTML{partials/profile-card.html}
+\inputHTML{partials/profile-card.html}
 ```
 
 规则：
@@ -94,6 +95,7 @@ MetaBlog 只处理：
 4. 如果文件不存在或路径不允许，会记录 warning，并跳过该导入。
 5. 如果文件内容不像 HTML，会记录 warning，但仍按原样嵌入。
 6. 该命令等价于把目标文件内容手动写进 `\begin{html}...\end{html}`。
+7. `\inputHTML{...}` 是 `\importHTML{...}` 的兼容别名，行为完全一致。
 
 ### 3.4 `%` 注释
 
@@ -364,15 +366,16 @@ print("hello")
 
 输出中会保留字面量 `\input{snippet.html}`，不会读取 `snippet.html` 文件。
 
-需要从外部文件导入 HTML 时，应使用 `\importHTML{...}`：
+需要从外部文件导入 HTML 时，应使用 `\importHTML{...}` 或兼容别名 `\inputHTML{...}`：
 
 ```latex
 \importHTML{snippet.html}
+\inputHTML{snippet.html}
 ```
 
-`\importHTML{...}` 是普通块级命令，不是 raw 环境内部命令。它会读取相对于主文件的 HTML 文件，并把文件内容作为 `RawHTML` 节点嵌入页面。
+`\importHTML{...}` / `\inputHTML{...}` 是普通块级命令，不是 raw 环境内部命令。它会读取相对于主文件的 HTML 文件，并把文件内容作为 `RawHTML` 节点嵌入页面。
 
-如果 `html` 环境或 `\importHTML{...}` 前后没有空白行，它会被当作段落中的 inline raw HTML 处理，不会主动添加换行或分段。此时应只放置适合出现在段落内部的 inline HTML，例如 `<span>`、`<a>`、`<strong>` 等。不要在 inline raw HTML 中放置 `<div>`；HTML 规范不允许 `<div>` 位于 `<p>` 内部，浏览器会自动闭合段落，导致实际显示出现额外分段。MetaBlog 在检测到 inline raw HTML 中包含 `<div>` 时会记录 warning。需要使用 `<div>`、`<section>` 等块级 HTML 时，应在 raw HTML 前后保留空白行，让它成为独立块。
+如果 `html` 环境、`\importHTML{...}` 或 `\inputHTML{...}` 前后没有空白行，它会被当作段落中的 inline raw HTML 处理，不会主动添加换行或分段。此时应只放置适合出现在段落内部的 inline HTML，例如 `<span>`、`<a>`、`<strong>` 等。不要在 inline raw HTML 中放置 `<div>`；HTML 规范不允许 `<div>` 位于 `<p>` 内部，浏览器会自动闭合段落，导致实际显示出现额外分段。MetaBlog 在检测到 inline raw HTML 中包含 `<div>` 时会记录 warning。需要使用 `<div>`、`<section>` 等块级 HTML 时，应在 raw HTML 前后保留空白行，让它成为独立块。
 
 该环境只适合写入可信 HTML。MetaBlog 不会清洗 `html` 环境中的标签、属性或脚本。
 
@@ -844,9 +847,10 @@ text\footnote{footnote content}
 \%
 \&
 \_
+\\
 ```
 
-`~` 渲染为不换行空格。
+`~` 渲染为不换行空格。`\\` 渲染为显式换行 `<br>`，不会创建新的段落；需要分段时仍应使用空白行。
 
 ### 15.11 引号、连字符和 `\IEEEPARstart`
 

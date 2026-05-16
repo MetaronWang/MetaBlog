@@ -220,6 +220,8 @@ metablog site init -root my-blog -title "My Blog"
 
 已有文件默认不会被覆盖；再次执行 `site init` 是安全的，命令只会补齐缺失项。
 
+`page_footing.tex` 和 `article_stat.tex` 只需要写组件内部片段。构建时程序会自动把 `page_footing.tex` 的解析结果包裹为 `footer.custom-page-footing`，把 `article_stat.tex` 的解析结果包裹为 `div.custom-article-stat`，因此组件文件中不应重复声明这两个外层容器。
+
 参数：
 
 | 参数 | 默认值 | 说明 |
