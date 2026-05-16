@@ -372,6 +372,8 @@ print("hello")
 
 `\importHTML{...}` 是普通块级命令，不是 raw 环境内部命令。它会读取相对于主文件的 HTML 文件，并把文件内容作为 `RawHTML` 节点嵌入页面。
 
+如果 `html` 环境或 `\importHTML{...}` 前后没有空白行，它会被当作段落中的 inline raw HTML 处理，不会主动添加换行或分段。此时应只放置适合出现在段落内部的 inline HTML，例如 `<span>`、`<a>`、`<strong>` 等。不要在 inline raw HTML 中放置 `<div>`；HTML 规范不允许 `<div>` 位于 `<p>` 内部，浏览器会自动闭合段落，导致实际显示出现额外分段。MetaBlog 在检测到 inline raw HTML 中包含 `<div>` 时会记录 warning。需要使用 `<div>`、`<section>` 等块级 HTML 时，应在 raw HTML 前后保留空白行，让它成为独立块。
+
 该环境只适合写入可信 HTML。MetaBlog 不会清洗 `html` 环境中的标签、属性或脚本。
 
 ## 9. 可折叠文本框 `tcb`

@@ -19,6 +19,12 @@ func parseInlineWithWarnings(s string) ([]ast.Inline, []string) {
 	return inlines, p.warnings
 }
 
+func parseInlineWithParser(s string, parser *Parser) ([]ast.Inline, []string) {
+	p := &inlineParser{s: s, tokens: lexer.Tokenize(s), parser: parser}
+	inlines := p.parseUntil("")
+	return inlines, p.warnings
+}
+
 type ParsedTextArgument struct {
 	Inlines  []ast.Inline
 	Align    string
@@ -34,20 +40,24 @@ func ParseTextArgumentWithDeclarations(s string) ParsedTextArgument {
 }
 
 func parseTextArgumentWithWarnings(s string) ParsedTextArgument {
+	return parseTextArgumentWithParser(s, nil)
+}
+
+func parseTextArgumentWithParser(s string, parser *Parser) ParsedTextArgument {
 	body := strings.TrimSpace(s)
 	decl := readTextDeclarations(body)
 	if !decl.HasDeclarations {
-		inlines, warnings := parseInlineWithWarnings(s)
+		inlines, warnings := parseInlineWithParser(s, parser)
 		return ParsedTextArgument{Inlines: inlines, Align: decl.Align, Warnings: warnings}
 	}
 	if strings.TrimSpace(decl.Rest) == "" {
 		return ParsedTextArgument{Align: decl.Align}
 	}
 	if !decl.HasStyle {
-		inlines, warnings := parseInlineWithWarnings(decl.Rest)
+		inlines, warnings := parseInlineWithParser(decl.Rest, parser)
 		return ParsedTextArgument{Inlines: inlines, Align: decl.Align, Warnings: warnings}
 	}
-	inlines, warnings := parseInlineWithWarnings(decl.Rest)
+	inlines, warnings := parseInlineWithParser(decl.Rest, parser)
 	decl.Style.Children = inlines
 	return ParsedTextArgument{Inlines: []ast.Inline{decl.Style}, Align: decl.Align, Warnings: warnings}
 }
@@ -55,6 +65,7 @@ func parseTextArgumentWithWarnings(s string) ParsedTextArgument {
 type inlineParser struct {
 	s        string
 	tokens   []lexer.Token
+	parser   *Parser
 	i        int
 	warnings []string
 }
@@ -93,6 +104,12 @@ func (p *inlineParser) parseUntil(endToken string) []ast.Inline {
 		case lexer.Comment:
 			p.i = tok.End
 			continue
+		case lexer.Raw:
+			if html, ok := p.readRawHTMLInline(tok); ok {
+				flush()
+				out = append(out, &ast.RawHTMLInline{HTML: html})
+				continue
+			}
 		case lexer.LBrace:
 			flush()
 			if arg, end, ok := p.readGroupAt(tok.Start, lexer.LBrace, lexer.RBrace); ok {
@@ -242,6 +259,17 @@ func (p *inlineParser) readCommandInline(tok lexer.Token) ([]ast.Inline, string,
 			url = normalizeURLArg(url)
 			return []ast.Inline{&ast.Link{URL: url, Children: []ast.Inline{&ast.Text{Value: url}}}}, "", true
 		}
+	case "importHTML", "inputHTML":
+		if arg, ok := p.readCommandArg(tok.Value); ok {
+			if p.parser == nil {
+				return nil, "", true
+			}
+			if html, ok := p.parser.importHTML(tok.Value, arg); ok {
+				p.warnInlineRawHTMLBlockElements(html)
+				return []ast.Inline{&ast.RawHTMLInline{HTML: html}}, "", true
+			}
+			return nil, "", true
+		}
 	case "cite":
 		if arg, ok := p.readCommandArg("cite"); ok {
 			return []ast.Inline{&ast.Cite{Keys: splitCSV(arg)}}, "", true
@@ -266,6 +294,9 @@ func (p *inlineParser) readCommandInline(tok lexer.Token) ([]ast.Inline, string,
 			p.i = end + len(`\)`)
 			return []ast.Inline{&ast.InlineMath{TeX: strings.TrimSpace(p.s[start:end])}}, "", true
 		}
+	case "\\":
+		p.i = tok.End
+		return []ast.Inline{&ast.LineBreak{}}, "", true
 	case ",", ";", ":":
 		p.i = tok.End
 		return nil, " ", true
@@ -319,6 +350,53 @@ func (p *inlineParser) readCommandInline(tok lexer.Token) ([]ast.Inline, string,
 	}
 	p.i = tok.End
 	return nil, "", true
+}
+
+func (p *inlineParser) readRawHTMLInline(tok lexer.Token) (string, bool) {
+	if tok.Kind != lexer.Raw || tok.Start != p.i {
+		return "", false
+	}
+	env, _, ok := readBeginAt(p.s, tok.Start)
+	if !ok || env != "html" {
+		return "", false
+	}
+	p.i = tok.End
+	html := stripEnvironmentShell(tok.Value, env)
+	p.warnInlineRawHTMLBlockElements(html)
+	return html, true
+}
+
+func (p *inlineParser) warnInlineRawHTMLBlockElements(htmlText string) {
+	if !containsHTMLTag(htmlText, "div") {
+		return
+	}
+	p.warnings = append(p.warnings, "inline raw HTML contains <div>; browsers close <p> before block elements, so use a blank line to make the raw HTML an independent block")
+}
+
+func containsHTMLTag(htmlText, tag string) bool {
+	lower := strings.ToLower(htmlText)
+	tag = strings.ToLower(tag)
+	for i := 0; i < len(lower); i++ {
+		if lower[i] != '<' {
+			continue
+		}
+		j := i + 1
+		if j < len(lower) && lower[j] == '/' {
+			j++
+		}
+		if j+len(tag) > len(lower) || lower[j:j+len(tag)] != tag {
+			continue
+		}
+		k := j + len(tag)
+		if k >= len(lower) {
+			continue
+		}
+		switch lower[k] {
+		case ' ', '\t', '\r', '\n', '\f', '>', '/':
+			return true
+		}
+	}
+	return false
 }
 
 func (p *inlineParser) readCommandArg(cmd string) (string, bool) {

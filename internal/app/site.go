@@ -12,6 +12,7 @@ import (
 
 	"MetaBlog/internal/assets"
 	"MetaBlog/internal/blog"
+	"MetaBlog/internal/latex/parser"
 	"MetaBlog/internal/pathutil"
 	"MetaBlog/internal/render"
 	"MetaBlog/internal/site"
@@ -39,6 +40,13 @@ type siteBuildResult struct {
 	log      string
 }
 
+type customComponents struct {
+	PageFooterHTML  string
+	ArticleStatHTML string
+	PageFooterPath  string
+	ArticleStatPath string
+}
+
 func RunSite(cfg Config) error {
 	cfg.ensureLaTeXMLIdentity()
 	rootDir := cfg.RootDir
@@ -63,6 +71,14 @@ func RunSite(cfg Config) error {
 		return err
 	}
 	cfg.logf("Site assets prepared: logo=%s icon=%s\n", valueOrDefault(siteData.Config.Logo, "(none)"), valueOrDefault(siteData.Config.Icon, "(none)"))
+	components, componentWarnings, err := loadCustomComponents(rootDir)
+	if err != nil {
+		return err
+	}
+	siteData.Config.PageFooterHTML = components.PageFooterHTML
+	if len(componentWarnings) > 0 {
+		logWarnings(cfg, componentWarnings)
+	}
 	if err := writeSitePages(cfg.OutDir, siteData); err != nil {
 		return err
 	}
@@ -74,15 +90,15 @@ func RunSite(cfg Config) error {
 
 	results := make(chan siteBuildResult, 2)
 	go func() {
-		warnings, logText, err := buildSiteAboutPage(cfg, siteData)
+		warnings, logText, err := buildSiteAboutPage(cfg, siteData, components)
 		results <- siteBuildResult{name: "about page", warnings: warnings, err: err, log: logText}
 	}()
 	go func() {
-		warnings, err := buildSiteArticles(cfg, siteData)
+		warnings, err := buildSiteArticles(cfg, siteData, components)
 		results <- siteBuildResult{name: "articles", warnings: warnings, err: err}
 	}()
 
-	var warnings []string
+	warnings := append([]string{}, componentWarnings...)
 	var buildErr error
 	for i := 0; i < 2; i++ {
 		result := <-results
@@ -113,6 +129,51 @@ func RunSite(cfg Config) error {
 	}
 	cfg.logf("Site built: %s warning(s)=%d\n", filepath.ToSlash(cfg.OutDir), len(warnings))
 	return nil
+}
+
+func loadCustomComponents(rootDir string) (customComponents, []string, error) {
+	dir := filepath.Join(rootDir, "data", "custom_components")
+	var components customComponents
+	var warnings []string
+	pageFooterPath := filepath.Join(dir, "page_footing.tex")
+	if htmlText, ok, componentWarnings, err := loadCustomComponent(pageFooterPath); err != nil {
+		return components, warnings, err
+	} else if ok {
+		components.PageFooterHTML = wrapCustomComponent("footer", "custom-page-footing", htmlText)
+		components.PageFooterPath = pageFooterPath
+		warnings = append(warnings, componentWarnings...)
+	}
+	articleStatPath := filepath.Join(dir, "article_stat.tex")
+	if htmlText, ok, componentWarnings, err := loadCustomComponent(articleStatPath); err != nil {
+		return components, warnings, err
+	} else if ok {
+		components.ArticleStatHTML = wrapCustomComponent("div", "custom-article-stat", htmlText)
+		components.ArticleStatPath = articleStatPath
+		warnings = append(warnings, componentWarnings...)
+	}
+	return components, warnings, nil
+}
+
+func wrapCustomComponent(tag, className, htmlText string) string {
+	if strings.TrimSpace(htmlText) == "" {
+		return ""
+	}
+	return "<" + tag + ` class="` + className + `">` + htmlText + "</" + tag + ">\n"
+}
+
+func loadCustomComponent(path string) (string, bool, []string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil, nil
+		}
+		return "", false, nil, err
+	}
+	doc, err := parser.Parse(string(data), nil, path, filepath.Dir(path))
+	if err != nil {
+		return "", false, nil, err
+	}
+	return render.RenderFragment(doc.Children), true, doc.Warnings, nil
 }
 
 func prepareSiteAssets(rootDir, outDir string, cfg *blog.Config) error {
@@ -218,14 +279,14 @@ func writeSitePages(outDir string, s *blog.Site) error {
 	return nil
 }
 
-func buildSiteAboutPage(cfg Config, s *blog.Site) ([]string, string, error) {
+func buildSiteAboutPage(cfg Config, s *blog.Site, components customComponents) ([]string, string, error) {
 	started := time.Now()
 	docCfg, docLog := cfg.withDocumentLog()
 	docCfg.logf("About page started\n")
 	sourceDir := filepath.Join(s.RootDir, "data", "about_page")
 	outPath := filepath.Join(cfg.OutDir, "about", "index.html")
 	if !cfg.Force {
-		fresh, err := documentOutputsFresh(sourceDir, outPath)
+		fresh, err := documentOutputsFresh(sourceDir, outPath, components.PageFooterPath)
 		if err != nil {
 			docCfg.logf("Freshness check failed: %v\n", err)
 			return nil, docLog.String(), err
@@ -243,6 +304,7 @@ func buildSiteAboutPage(cfg Config, s *blog.Site) ([]string, string, error) {
 	opts := render.Options{
 		AssetPrefix: "..",
 		HeaderHTML:  blog.Header(s.Config, ".."),
+		FooterHTML:  components.PageFooterHTML,
 		BodyClass:   "site-layout",
 		IconHref:    s.Config.Icon,
 	}
@@ -269,7 +331,7 @@ func buildSiteAboutPage(cfg Config, s *blog.Site) ([]string, string, error) {
 	return warnings, docLog.String(), nil
 }
 
-func buildSiteArticles(cfg Config, s *blog.Site) ([]string, error) {
+func buildSiteArticles(cfg Config, s *blog.Site, components customComponents) ([]string, error) {
 	if len(s.Articles) == 0 {
 		cfg.logf("No active articles to build.\n")
 		return nil, nil
@@ -297,7 +359,7 @@ func buildSiteArticles(cfg Config, s *blog.Site) ([]string, error) {
 		go func(workerID int) {
 			defer wg.Done()
 			for job := range jobs {
-				results <- buildOneSiteArticle(cfg, s, job.index, job.article, workerID)
+				results <- buildOneSiteArticle(cfg, s, job.index, job.article, workerID, components)
 			}
 		}(i + 1)
 	}
@@ -331,7 +393,7 @@ func buildSiteArticles(cfg Config, s *blog.Site) ([]string, error) {
 	return warnings, nil
 }
 
-func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Article, workerID int) (result articleBuildResult) {
+func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Article, workerID int, components customComponents) (result articleBuildResult) {
 	started := time.Now()
 	result = articleBuildResult{index: index, title: article.Title}
 	docCfg, docLog := cfg.withDocumentLog()
@@ -354,7 +416,7 @@ func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Artic
 	docCfg.logf("Source directory: %s\n", filepath.ToSlash(sourceDir))
 	docCfg.logf("Output: %s\n", filepath.ToSlash(outPath))
 	if !cfg.Force {
-		fresh, err := documentOutputsFresh(sourceDir, outPath)
+		fresh, err := documentOutputsFresh(sourceDir, outPath, components.PageFooterPath, components.ArticleStatPath)
 		if err != nil {
 			docCfg.logf("Freshness check failed: %v\n", err)
 			result.err = err
@@ -397,10 +459,12 @@ func buildOneSiteArticle(cfg Config, s *blog.Site, index int, article blog.Artic
 		docCfg.logf("Article main figure skipped by -no-assets\n")
 	}
 	opts := render.Options{
-		AssetPrefix: "../..",
-		HeaderHTML:  blog.Header(s.Config, "../.."),
-		BodyClass:   "site-layout",
-		IconHref:    s.Config.Icon,
+		AssetPrefix:     "../..",
+		HeaderHTML:      blog.Header(s.Config, "../.."),
+		FooterHTML:      components.PageFooterHTML,
+		ArticleStatHTML: components.ArticleStatHTML,
+		BodyClass:       "site-layout",
+		IconHref:        s.Config.Icon,
 	}
 	htmlText, articleWarnings, _, err := buildArticle(docCfg, input, cfg.OutDir, "articles/"+slug, "../..", opts)
 	warnings = append(warnings, articleWarnings...)
@@ -437,13 +501,22 @@ func upPrefix(levels int) string {
 	return strings.TrimRight(strings.Repeat("../", levels), "/")
 }
 
-func documentOutputsFresh(sourceDir, requiredOutput string) (bool, error) {
+func documentOutputsFresh(sourceDir, requiredOutput string, extraDeps ...string) (bool, error) {
 	sourceLatest, hasSource, err := latestFileModTime(sourceDir)
 	if err != nil {
 		return false, err
 	}
 	if !hasSource {
 		return false, nil
+	}
+	for _, dep := range extraDeps {
+		depLatest, hasDep, err := latestPathModTime(dep)
+		if err != nil {
+			return false, err
+		}
+		if hasDep && depLatest.After(sourceLatest) {
+			sourceLatest = depLatest
+		}
 	}
 	outputTime, hasOutput, err := documentOutputModTime(requiredOutput)
 	if err != nil {
@@ -453,6 +526,23 @@ func documentOutputsFresh(sourceDir, requiredOutput string) (bool, error) {
 		return false, nil
 	}
 	return !sourceLatest.After(outputTime), nil
+}
+
+func latestPathModTime(path string) (time.Time, bool, error) {
+	if strings.TrimSpace(path) == "" {
+		return time.Time{}, false, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	if !info.IsDir() {
+		return info.ModTime(), true, nil
+	}
+	return latestFileModTime(path)
 }
 
 func latestFileModTime(root string) (time.Time, bool, error) {

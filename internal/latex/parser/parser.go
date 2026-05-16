@@ -198,7 +198,7 @@ func (p *Parser) parseTextArgument(s string) []ast.Inline {
 }
 
 func (p *Parser) parseTextArgumentWithDeclarations(s string) ParsedTextArgument {
-	parsed := ParseTextArgumentWithDeclarations(s)
+	parsed := parseTextArgumentWithParser(s, p)
 	p.warnings = append(p.warnings, parsed.Warnings...)
 	return parsed
 }
@@ -241,6 +241,67 @@ func isBlockStyledGroupCandidate(s string, start, idx int) bool {
 		j--
 	}
 	return j < start || s[j] == '\n'
+}
+
+func groupBodyContainsBlockSyntax(body string) bool {
+	if hasBlankLine(body) {
+		return true
+	}
+	tokens := lexer.Tokenize(body)
+	braceDepth := 0
+	bracketDepth := 0
+	for _, tok := range tokens {
+		if tok.Kind == lexer.EOF {
+			break
+		}
+		switch tok.Kind {
+		case lexer.LBrace:
+			braceDepth++
+			continue
+		case lexer.RBrace:
+			if braceDepth > 0 {
+				braceDepth--
+			}
+			continue
+		case lexer.LBracket:
+			bracketDepth++
+			continue
+		case lexer.RBracket:
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+			continue
+		}
+		if braceDepth != 0 || bracketDepth != 0 {
+			continue
+		}
+		if tok.Kind == lexer.Raw {
+			env, _, ok := readBeginAt(body, tok.Start)
+			if !ok || env != "html" {
+				return true
+			}
+			continue
+		}
+		if tok.Kind != lexer.Command {
+			continue
+		}
+		switch tok.Value {
+		case "begin", "[", "bibliographystyle", "bibliography", "appendices", "section", "subsection", "subsubsection", "subsubsubsection":
+			return true
+		}
+	}
+	return false
+}
+
+func groupFollowedByParagraphBoundary(s string, end int) bool {
+	if end >= len(s) {
+		return true
+	}
+	next := skipWhitespace(s, end)
+	if next >= len(s) {
+		return true
+	}
+	return hasBlankLine(s[end:next])
 }
 
 func (p *Parser) readStyledBlockAt(s string, i int, appendix bool) (*ast.StyledBlock, int, bool) {
@@ -457,6 +518,9 @@ func (bp *blockParser) readSectionedGroupBlocks() ([]ast.Block, bool) {
 	if tok.Start != bp.pos || tok.Kind != lexer.LBrace {
 		return nil, false
 	}
+	if !bp.shouldReadGroupAsBlock(tok.Start) {
+		return nil, false
+	}
 	if styled, end, ok := bp.parser.readStyledBlockAt(bp.raw, bp.pos, bp.appendix); ok {
 		bp.pos = end
 		return styleSectionedBlocks(styled.Children, styled), true
@@ -616,6 +680,9 @@ func (bp *blockParser) readGroupBlocks() ([]ast.Block, bool) {
 	if tok.Start != bp.pos || tok.Kind != lexer.LBrace {
 		return nil, false
 	}
+	if !bp.shouldReadGroupAsBlock(tok.Start) {
+		return nil, false
+	}
 	if styled, end, ok := bp.parser.readStyledBlockAt(bp.raw, bp.pos, bp.appendix); ok {
 		bp.pos = end
 		return []ast.Block{styled}, true
@@ -625,6 +692,17 @@ func (bp *blockParser) readGroupBlocks() ([]ast.Block, bool) {
 		return grouped, true
 	}
 	return nil, false
+}
+
+func (bp *blockParser) shouldReadGroupAsBlock(start int) bool {
+	body, end, ok := readBalanced(bp.raw, start, '{', '}')
+	if !ok {
+		return false
+	}
+	if groupBodyContainsBlockSyntax(body) {
+		return true
+	}
+	return groupFollowedByParagraphBoundary(bp.raw, end)
 }
 
 func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
@@ -728,38 +806,51 @@ func (bp *blockParser) readDisplayMathBlock() (ast.Block, bool) {
 }
 
 func (bp *blockParser) readImportHTMLBlock() (ast.Block, bool) {
-	if !bp.commandAt("importHTML") {
+	cmd := ""
+	if bp.commandAt("importHTML") {
+		cmd = "importHTML"
+	} else if bp.commandAt("inputHTML") {
+		cmd = "inputHTML"
+	}
+	if cmd == "" {
 		return nil, false
 	}
-	arg, end, ok := readOneCommandArg(bp.raw, bp.pos, "importHTML")
+	arg, end, ok := readOneCommandArg(bp.raw, bp.pos, cmd)
 	if !ok {
-		bp.parser.warnings = append(bp.parser.warnings, "could not parse \\importHTML path")
+		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("could not parse \\%s path", cmd))
 		bp.pos = bp.currentToken().End
 		return nil, true
 	}
 	bp.pos = end
+	if html, ok := bp.parser.importHTML(cmd, arg); ok {
+		return &ast.RawHTML{HTML: html}, true
+	}
+	return nil, true
+}
+
+func (p *Parser) importHTML(cmd, arg string) (string, bool) {
 	rel := strings.TrimSpace(arg)
 	if rel == "" {
-		bp.parser.warnings = append(bp.parser.warnings, "\\importHTML path is empty")
-		return nil, true
+		p.warnings = append(p.warnings, fmt.Sprintf("\\%s path is empty", cmd))
+		return "", false
 	}
 	cleanRel, err := pathutil.CleanRelativePath(rel)
 	if err != nil {
-		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML path not allowed %s: %v", rel, err))
-		return nil, true
+		p.warnings = append(p.warnings, fmt.Sprintf("\\%s path not allowed %s: %v", cmd, rel, err))
+		return "", false
 	}
-	baseDir := bp.parser.importHTMLBaseDir()
+	baseDir := p.importHTMLBaseDir()
 	path := filepath.Join(baseDir, cleanRel)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML file not found %s: %v", rel, err))
-		return nil, true
+		p.warnings = append(p.warnings, fmt.Sprintf("\\%s file not found %s: %v", cmd, rel, err))
+		return "", false
 	}
 	html := string(data)
 	if !looksLikeHTML(html) {
-		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML content does not look like HTML: %s", rel))
+		p.warnings = append(p.warnings, fmt.Sprintf("\\%s content does not look like HTML: %s", cmd, rel))
 	}
-	return &ast.RawHTML{HTML: html}, true
+	return html, true
 }
 
 func (p *Parser) importHTMLBaseDir() string {
@@ -904,8 +995,11 @@ func (bp *blockParser) nextParagraphBoundary() int {
 
 func (bp *blockParser) isBlockBoundaryToken(tok lexer.Token, paragraphStart int) bool {
 	switch tok.Kind {
-	case lexer.Raw, lexer.LBrace:
-		return tok.Kind == lexer.Raw || isBlockStyledGroupCandidate(bp.raw, paragraphStart, tok.Start)
+	case lexer.Raw:
+		env, _, ok := readBeginAt(bp.raw, tok.Start)
+		return !ok || env != "html"
+	case lexer.LBrace:
+		return isBlockStyledGroupCandidate(bp.raw, paragraphStart, tok.Start)
 	case lexer.Dollar:
 		return strings.HasPrefix(bp.raw[tok.Start:], "$$")
 	case lexer.Command:

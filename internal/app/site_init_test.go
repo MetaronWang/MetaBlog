@@ -27,6 +27,7 @@ func TestRunSiteInitCreatesMinimalSite(t *testing.T) {
 		"articles",
 		"asset/figs",
 		"data/about_page",
+		"data/custom_components",
 		"web/static/fonts",
 	} {
 		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel)))
@@ -41,6 +42,8 @@ func TestRunSiteInitCreatesMinimalSite(t *testing.T) {
 		"data/config.toml",
 		"data/articles.toml",
 		"data/about_page/main.tex",
+		"data/custom_components/page_footing.tex",
+		"data/custom_components/article_stat.tex",
 		"asset/figs/circle_example.svg",
 		"web/static/fonts.css",
 		".gitignore",
@@ -67,6 +70,16 @@ func TestRunSiteInitCreatesMinimalSite(t *testing.T) {
 	if !strings.Contains(string(icon), `<circle cx="64" cy="64" r="56" fill="#000"/>`) {
 		t.Fatalf("default circle svg was not written:\n%s", string(icon))
 	}
+	footer, err := os.ReadFile(filepath.Join(dir, "data", "custom_components", "page_footing.tex"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(footer), `custom-page-footing`) || strings.Contains(string(footer), `<footer`) {
+		t.Fatalf("default page footing should not contain its outer wrapper:\n%s", string(footer))
+	}
+	if !strings.Contains(string(footer), `busuanzi_value_site_pv`) {
+		t.Fatalf("default page footing was not written with busuanzi markup:\n%s", string(footer))
+	}
 }
 
 func TestRunSiteInitWorksFromEmptyWorkingDirectory(t *testing.T) {
@@ -86,6 +99,8 @@ func TestRunSiteInitWorksFromEmptyWorkingDirectory(t *testing.T) {
 		"site/data/config.toml",
 		"site/data/articles.toml",
 		"site/data/about_page/main.tex",
+		"site/data/custom_components/page_footing.tex",
+		"site/data/custom_components/article_stat.tex",
 		"site/asset/figs/circle_example.svg",
 		"site/web/static/fonts.css",
 	} {

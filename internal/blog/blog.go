@@ -23,6 +23,7 @@ type Config struct {
 	Icon                string `json:"icon" yaml:"icon" toml:"icon"`
 	HomePageSize        int    `json:"home_page_size" yaml:"home_page_size" toml:"home_page_size"`
 	ArticleListPageSize int    `json:"article_list_page_size" yaml:"article_list_page_size" toml:"article_list_page_size"`
+	PageFooterHTML      string `json:"-" yaml:"-" toml:"-"`
 }
 
 type Article struct {
@@ -376,7 +377,11 @@ func RenderShell(cfg Config, basePrefix, pageTitle, body string) string {
 	b.WriteString(Header(cfg, basePrefix))
 	b.WriteString(`<main class="site-page">`)
 	b.WriteString(body)
-	b.WriteString("</main>\n</body>\n</html>\n")
+	b.WriteString("</main>\n")
+	if cfg.PageFooterHTML != "" {
+		b.WriteString(cfg.PageFooterHTML)
+	}
+	b.WriteString("</body>\n</html>\n")
 	return b.String()
 }
 

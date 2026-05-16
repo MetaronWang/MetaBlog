@@ -60,6 +60,25 @@ func TestDefaultCodeBlockCSSPreservesWhitespaceAndWrapMode(t *testing.T) {
 	}
 }
 
+func TestDefaultSiteLayoutSupportsStickyFooter(t *testing.T) {
+	for _, want := range []string{
+		`body.site-layout {`,
+		`min-height: calc(100vh - 68px);`,
+		`display: flex;`,
+		`flex-direction: column;`,
+		`body.site-layout > .site-page,`,
+		`body.site-layout > .page {`,
+		`flex: 1 0 auto;`,
+		`.custom-page-footing {`,
+		`margin: auto auto 0;`,
+		`min-height: calc(100vh - 112px);`,
+	} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Fatalf("default CSS missing sticky footer rule %q", want)
+		}
+	}
+}
+
 func TestDefaultFontsCSSIncludesSourceCodePro(t *testing.T) {
 	for _, want := range []string{
 		`font-family: "Source Code Pro"`,

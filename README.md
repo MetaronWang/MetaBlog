@@ -302,6 +302,7 @@ my-blog/
 | `data/config.toml` | 网站级配置。 |
 | `data/articles.toml` | 文章元数据列表。 |
 | `data/about_page/main.tex` | 关于页面的 LaTeX 主文件。 |
+| `data/custom_components/` | 自定义页面组件，目前包含页尾和文章统计片段。 |
 | `asset/` | 网站级资源，例如 logo 和 icon。 |
 | `web/static/` | 网站静态资源和字体。 |
 | `.metablog-cache/` | 本地构建缓存，不应提交。 |
@@ -490,6 +491,15 @@ MetaBlog 不是完整 TeX 引擎。它采用两层策略：
 - `\importHTML{...}`：导入相对于主文件的外部 HTML 片段，并按原始 HTML 输出。
 
 `lstlisting` 和 `minted` 会渲染为带标题栏、行号、复制、折叠、自动换行切换和 Chroma 语法高亮的代码框。`html` 环境和 `\importHTML` 只适合可信内容；`\importHTML` 会检查目标文件是否存在，并在内容不像 HTML 时记录 warning。
+
+### 自定义组件
+
+`data/custom_components/` 下的组件会在整站构建时自动加载：
+
+- `page_footing.tex`：注入所有页面底部。默认包含卜算子站点总访问量和访客数统计。
+- `article_stat.tex`：注入每篇文章标题区的作者信息下方。默认包含卜算子当前页面阅读量统计。
+
+这两个文件按普通 LaTeX 片段解析，通常使用 `html` 环境写入可信 HTML。卜算子当前常用接口只提供站点 PV、站点 UV 和页面 PV，因此默认文章统计展示的是本文阅读量；站点访客数放在全站页尾中展示。
 
 未知 inline 命令和未知环境会记录 warning。未知环境会作为透明块保留内部可解析内容。
 

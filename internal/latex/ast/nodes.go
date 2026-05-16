@@ -260,6 +260,16 @@ type InlineMath struct {
 
 func (*InlineMath) InlineKind() string { return "inlineMath" }
 
+type LineBreak struct{}
+
+func (*LineBreak) InlineKind() string { return "lineBreak" }
+
+type RawHTMLInline struct {
+	HTML string `json:"html"`
+}
+
+func (*RawHTMLInline) InlineKind() string { return "rawHTML" }
+
 type Link struct {
 	URL      string   `json:"url"`
 	Children []Inline `json:"children"`

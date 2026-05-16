@@ -202,6 +202,7 @@ metablog site init -root my-blog -title "My Blog"
 | `articles/` | 文章目录。 |
 | `asset/figs/` | 站点 logo 和 icon 等资源目录。 |
 | `data/about_page/` | 关于页面 LaTeX 文档目录。 |
+| `data/custom_components/` | 自定义页面组件目录。 |
 | `web/static/fonts/` | Web 字体目录。 |
 
 会初始化的文件：
@@ -211,6 +212,8 @@ metablog site init -root my-blog -title "My Blog"
 | `data/config.toml` | 网站标题、logo、icon 和分页配置。 |
 | `data/articles.toml` | 空文章列表配置。 |
 | `data/about_page/main.tex` | 默认关于页面。 |
+| `data/custom_components/page_footing.tex` | 默认页尾组件，包含卜算子站点统计块。 |
+| `data/custom_components/article_stat.tex` | 默认文章统计组件，包含卜算子页面阅读量块。 |
 | `asset/figs/circle_example.svg` | 默认站点 logo 和 icon 示例图。 |
 | `web/static/fonts.css` | 默认字体声明。 |
 | `.gitignore` | 忽略 `out/`、`.metablog-cache/`、`.gocache/` 和 `.gomodcache/`。 |

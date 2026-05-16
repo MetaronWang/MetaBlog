@@ -199,6 +199,26 @@ body {
 }
 body.site-layout {
   padding-top: 68px;
+  min-height: calc(100vh - 68px);
+  display: flex;
+  flex-direction: column;
+}
+body.site-layout > .site-page,
+body.site-layout > .page {
+  flex: 1 0 auto;
+}
+.custom-page-footing {
+  margin: auto auto 0;
+  padding: 48px 24px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.custom-article-stat {
+  margin: 0 0 22px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 .site-topbar {
   position: fixed;
@@ -1549,7 +1569,10 @@ pre {
 }
 @media (max-width: 720px) {
   .page { padding: 24px 16px 56px; }
-  body.site-layout { padding-top: 112px; }
+  body.site-layout {
+    padding-top: 112px;
+    min-height: calc(100vh - 112px);
+  }
   .site-topbar { height: 112px; }
   .site-topbar-inner {
     flex-direction: column;

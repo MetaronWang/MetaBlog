@@ -26,10 +26,12 @@ type labelTarget struct {
 }
 
 type Options struct {
-	AssetPrefix string
-	HeaderHTML  string
-	BodyClass   string
-	IconHref    string
+	AssetPrefix     string
+	HeaderHTML      string
+	FooterHTML      string
+	ArticleStatHTML string
+	BodyClass       string
+	IconHref        string
 }
 
 func Render(doc *ast.Document) string {
@@ -102,6 +104,9 @@ document.addEventListener("DOMContentLoaded", function () {
 		b.WriteString(r.renderInlines(doc.Title))
 		b.WriteString("</h1>")
 		r.renderAuthorMetadata(&b)
+		if opts.ArticleStatHTML != "" {
+			b.WriteString(opts.ArticleStatHTML)
+		}
 		if len(doc.Abstract) > 0 {
 			r.renderAbstractBlock(&b, doc.Abstract)
 		}
@@ -115,9 +120,24 @@ document.addEventListener("DOMContentLoaded", function () {
 	}
 	r.renderBlocks(&b, doc.Children)
 	b.WriteString("</article></main>\n")
+	if opts.FooterHTML != "" {
+		b.WriteString(opts.FooterHTML)
+	}
 	b.WriteString(tocToggleScript())
 	b.WriteString(codeBlockScript())
 	b.WriteString("</body>\n</html>\n")
+	return b.String()
+}
+
+func RenderFragment(blocks []ast.Block) string {
+	r := &Renderer{
+		labels:       map[string]labelTarget{},
+		missingRefs:  map[string]bool{},
+		citeNums:     map[string]int{},
+		missingCites: map[string]bool{},
+	}
+	var b strings.Builder
+	r.renderBlocks(&b, blocks)
 	return b.String()
 }
 
@@ -674,6 +694,10 @@ func (r *Renderer) renderInlines(inlines []ast.Inline) string {
 			b.WriteString(`<span class="math inline">\(`)
 			b.WriteString(html.EscapeString(n.TeX))
 			b.WriteString(`\)</span>`)
+		case *ast.LineBreak:
+			b.WriteString("<br>")
+		case *ast.RawHTMLInline:
+			b.WriteString(n.HTML)
 		case *ast.Link:
 			b.WriteString(`<a href="`)
 			b.WriteString(html.EscapeString(safeLinkURL(n.URL)))
@@ -727,6 +751,10 @@ func (r *Renderer) renderTOCInlines(inlines []ast.Inline) string {
 			b.WriteString(`<span class="math inline">\(`)
 			b.WriteString(html.EscapeString(n.TeX))
 			b.WriteString(`\)</span>`)
+		case *ast.LineBreak:
+			b.WriteString("<br>")
+		case *ast.RawHTMLInline:
+			b.WriteString(n.HTML)
 		case *ast.Link:
 			b.WriteString(r.renderTOCInlines(n.Children))
 		case *ast.Cite:
@@ -1216,6 +1244,10 @@ func visibleInlineText(node ast.Inline) string {
 		return inlineText(n.Children)
 	case *ast.InlineMath:
 		return "x"
+	case *ast.LineBreak:
+		return "\n"
+	case *ast.RawHTMLInline:
+		return ""
 	case *ast.Link:
 		return inlineText(n.Children)
 	case *ast.Cite:
@@ -1373,6 +1405,10 @@ func (r *Renderer) plainInlines(inlines []ast.Inline) string {
 			b.WriteString(r.plainInlines(n.Children))
 		case *ast.InlineMath:
 			b.WriteString(n.TeX)
+		case *ast.LineBreak:
+			b.WriteByte('\n')
+		case *ast.RawHTMLInline:
+			b.WriteString(html.UnescapeString(stripHTMLTags(n.HTML)))
 		case *ast.Link:
 			b.WriteString(r.plainInlines(n.Children))
 		case *ast.Cite:
@@ -1529,6 +1565,10 @@ func inlineText(inlines []ast.Inline) string {
 			b.WriteString(inlineText(n.Children))
 		case *ast.InlineMath:
 			b.WriteString(n.TeX)
+		case *ast.LineBreak:
+			b.WriteByte('\n')
+		case *ast.RawHTMLInline:
+			b.WriteString(html.UnescapeString(stripHTMLTags(n.HTML)))
 		case *ast.Link:
 			b.WriteString(inlineText(n.Children))
 		case *ast.Cite:

@@ -114,13 +114,13 @@ func RunSiteServe(cfg SiteServeConfig) error {
 	}
 
 	if cfg.Watch {
-		siteData, buildCfg, err := loadSiteForWatch(cfg, outDir, store)
+		siteData, buildCfg, components, err := loadSiteForWatch(cfg, outDir, store)
 		if err != nil {
 			return fmt.Errorf("watch: load site data: %w", err)
 		}
 		buildCfg.ensureLaTeXMLIdentity()
 		buildCfg.prepareLaTeXMLIdentity()
-		startWatcher(buildCfg, siteData, outDir, stopCh, store, liveReload)
+		startWatcher(buildCfg, siteData, components, outDir, stopCh, store, liveReload)
 	}
 
 	cfg.logf("Serving %s\n", filepath.ToSlash(outDir))
@@ -133,18 +133,18 @@ func RunSiteServe(cfg SiteServeConfig) error {
 	return err
 }
 
-func loadSiteForWatch(cfg SiteServeConfig, outDir string, store *memStore) (*blog.Site, Config, error) {
+func loadSiteForWatch(cfg SiteServeConfig, outDir string, store *memStore) (*blog.Site, Config, customComponents, error) {
 	rootDir := cfg.RootDir
 	if rootDir == "" {
 		rootDir = "."
 	}
 	rootDir, err := filepath.Abs(rootDir)
 	if err != nil {
-		return nil, Config{}, err
+		return nil, Config{}, customComponents{}, err
 	}
-	siteData, err := loadPreparedSiteForWatch(rootDir, outDir, cfg.SiteConfig, cfg.ArticlesFile, store)
+	siteData, components, err := loadPreparedSiteForWatch(rootDir, outDir, cfg.SiteConfig, cfg.ArticlesFile, store)
 	if err != nil {
-		return nil, Config{}, err
+		return nil, Config{}, customComponents{}, err
 	}
 	buildCfg := Config{
 		RootDir:        rootDir,
@@ -163,24 +163,29 @@ func loadSiteForWatch(cfg SiteServeConfig, outDir string, store *memStore) (*blo
 	if store != nil {
 		buildCfg.CacheStore = latexml.NewCacheStore(256)
 	}
-	return siteData, buildCfg, nil
+	return siteData, buildCfg, components, nil
 }
 
-func loadPreparedSiteForWatch(rootDir, outDir, siteConfig, articlesFile string, store *memStore) (*blog.Site, error) {
+func loadPreparedSiteForWatch(rootDir, outDir, siteConfig, articlesFile string, store *memStore) (*blog.Site, customComponents, error) {
 	siteData, err := blog.Load(rootDir, siteConfig, articlesFile)
 	if err != nil {
-		return nil, err
+		return nil, customComponents{}, err
 	}
+	components, _, err := loadCustomComponents(rootDir)
+	if err != nil {
+		return nil, customComponents{}, err
+	}
+	siteData.Config.PageFooterHTML = components.PageFooterHTML
 	if store != nil {
 		if err := prepareSiteAssetsInMemory(rootDir, store, &siteData.Config); err != nil {
-			return nil, err
+			return nil, customComponents{}, err
 		}
-		return siteData, nil
+		return siteData, components, nil
 	}
 	if err := prepareSiteAssets(rootDir, outDir, &siteData.Config); err != nil {
-		return nil, err
+		return nil, customComponents{}, err
 	}
-	return siteData, nil
+	return siteData, components, nil
 }
 
 func prepareSiteAssetsInMemory(rootDir string, store *memStore, cfg *blog.Config) error {

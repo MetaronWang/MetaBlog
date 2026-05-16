@@ -147,6 +147,49 @@ func TestRenderWithOptionsIncludesIcon(t *testing.T) {
 	}
 }
 
+func TestRenderWithOptionsInjectsFooterAndArticleStat(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Authors: []ast.Author{
+			{Name: []ast.Inline{&ast.Text{Value: "Alice"}}},
+		},
+	}
+
+	got := RenderWithOptions(doc, Options{
+		ArticleStatHTML: `<div class="custom-article-stat">stat</div>`,
+		FooterHTML:      `<footer class="custom-page-footing">footer</footer>`,
+	})
+	metaIdx := strings.Index(got, `class="article-meta"`)
+	statIdx := strings.Index(got, `class="custom-article-stat"`)
+	mainEndIdx := strings.Index(got, `</article></main>`)
+	footerIdx := strings.Index(got, `class="custom-page-footing"`)
+	bodyEndIdx := strings.Index(got, `</body>`)
+	if metaIdx < 0 || statIdx < 0 || statIdx < metaIdx {
+		t.Fatalf("article stat was not injected after author metadata:\n%s", got)
+	}
+	if mainEndIdx < 0 || footerIdx < mainEndIdx || bodyEndIdx < footerIdx {
+		t.Fatalf("footer was not injected after article main and before body end:\n%s", got)
+	}
+}
+
+func TestRenderLineBreakInline(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Text{Value: "First line"},
+				&ast.LineBreak{},
+				&ast.Text{Value: "Second line"},
+			}},
+		},
+	}
+
+	got := Render(doc)
+	if !strings.Contains(got, `<p>First line<br>Second line</p>`) {
+		t.Fatalf("line break inline did not render as br:\n%s", got)
+	}
+}
+
 func TestRenderTCB(t *testing.T) {
 	doc := &ast.Document{
 		Title: []ast.Inline{&ast.Text{Value: "Test"}},
@@ -376,6 +419,25 @@ func TestRenderRawHTMLBlockWithoutEscaping(t *testing.T) {
 	}
 	if strings.Contains(got, `raw &amp; html`) {
 		t.Fatalf("raw HTML block was escaped:\n%s", got)
+	}
+}
+
+func TestRenderRawHTMLInlineWithoutExtraBreak(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Text{Value: "Before "},
+				&ast.RawHTMLInline{HTML: `<span class="raw">raw</span>`},
+				&ast.Text{Value: " after."},
+			}},
+		},
+	}
+
+	got := Render(doc)
+	want := `<p>Before <span class="raw">raw</span> after.</p>`
+	if !strings.Contains(got, want) {
+		t.Fatalf("inline raw HTML did not stay inside paragraph; want %q in:\n%s", want, got)
 	}
 }
 

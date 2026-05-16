@@ -587,6 +587,92 @@ After.`, nil, inputPath, dir)
 	}
 }
 
+func TestRawHTMLWithoutBlankLineStaysInParagraph(t *testing.T) {
+	dir := t.TempDir()
+	htmlPath := filepath.Join(dir, "snippet.html")
+	if err := os.WriteFile(htmlPath, []byte(`<span class="imported">imported</span>`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(dir, "main.tex")
+	doc, err := Parse(`Before \begin{html}<span class="raw">raw</span>\end{html} middle \importHTML{snippet.html} after.`, nil, inputPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one paragraph, got %#v", doc.Children)
+	}
+	para, ok := doc.Children[0].(*ast.Paragraph)
+	if !ok {
+		t.Fatalf("child is %T, want *ast.Paragraph", doc.Children[0])
+	}
+	var rawCount int
+	for _, inline := range para.Inlines {
+		if _, ok := inline.(*ast.RawHTMLInline); ok {
+			rawCount++
+		}
+	}
+	if rawCount != 2 {
+		t.Fatalf("expected two inline raw HTML nodes, got %d: %#v", rawCount, para.Inlines)
+	}
+}
+
+func TestStyledGroupBeforeRawHTMLStaysInParagraphWithoutBlankLine(t *testing.T) {
+	doc, err := Parse(`{\large Before}
+\begin{html}<div class="raw">raw</div>\end{html}
+After.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 1 || !strings.Contains(doc.Warnings[0], `inline raw HTML contains <div>`) {
+		t.Fatalf("inline <div> warning missing: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one paragraph, got %#v", doc.Children)
+	}
+	para, ok := doc.Children[0].(*ast.Paragraph)
+	if !ok {
+		t.Fatalf("child is %T, want *ast.Paragraph", doc.Children[0])
+	}
+	var hasStyled, hasRaw bool
+	for _, inline := range para.Inlines {
+		if _, ok := inline.(*ast.Styled); ok {
+			hasStyled = true
+		}
+		if _, ok := inline.(*ast.RawHTMLInline); ok {
+			hasRaw = true
+		}
+	}
+	if !hasStyled || !hasRaw {
+		t.Fatalf("expected styled inline and raw HTML in one paragraph; got %#v", para.Inlines)
+	}
+}
+
+func TestInputHTMLAliasEmbedsRawHTMLFile(t *testing.T) {
+	dir := t.TempDir()
+	htmlBody := `<span class="alias">alias</span>`
+	if err := os.WriteFile(filepath.Join(dir, "snippet.html"), []byte(htmlBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(dir, "main.tex")
+	doc, err := Parse(`\inputHTML{snippet.html}`, nil, inputPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one raw HTML block, got %#v", doc.Children)
+	}
+	raw, ok := doc.Children[0].(*ast.RawHTML)
+	if !ok || raw.HTML != htmlBody {
+		t.Fatalf("inputHTML alias did not embed raw HTML: %#v", doc.Children)
+	}
+}
+
 func TestImportHTMLCommandWarnsForMissingAndNonHTMLFiles(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "plain.txt"), []byte("plain text"), 0644); err != nil {
@@ -691,6 +777,26 @@ func TestInlineParserUsesTokenGroupsForUnknownCommandFallback(t *testing.T) {
 	}
 	if blockText(para) != "Text kept % & _." {
 		t.Fatalf("escaped command text changed: %q", blockText(para))
+	}
+}
+
+func TestLineBreakCommandParsesAsInlineBreak(t *testing.T) {
+	doc, err := Parse(`First line\\Second line.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one paragraph, got %#v", doc.Children)
+	}
+	para := doc.Children[0].(*ast.Paragraph)
+	if len(para.Inlines) != 3 {
+		t.Fatalf("expected text, line break, text; got %#v", para.Inlines)
+	}
+	if _, ok := para.Inlines[1].(*ast.LineBreak); !ok {
+		t.Fatalf("middle inline is not line break: %#v", para.Inlines[1])
 	}
 }
 

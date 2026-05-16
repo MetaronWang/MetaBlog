@@ -92,6 +92,19 @@ func TestRenderHomeShowsNewestArticlesWithMetadata(t *testing.T) {
 	}
 }
 
+func TestRenderShellIncludesPageFooter(t *testing.T) {
+	got := RenderShell(Config{
+		Title:          "MetaBlog",
+		PageFooterHTML: `<footer class="custom-page-footing">footer</footer>`,
+	}, "", "Page", "<p>Body</p>")
+	mainEndIdx := strings.Index(got, `</main>`)
+	footerIdx := strings.Index(got, `class="custom-page-footing"`)
+	bodyEndIdx := strings.Index(got, `</body>`)
+	if mainEndIdx < 0 || footerIdx < mainEndIdx || bodyEndIdx < footerIdx {
+		t.Fatalf("page footer was not injected after main and before body end:\n%s", got)
+	}
+}
+
 func TestRenderHomePaginatesTenArticles(t *testing.T) {
 	var articles []Article
 	for i := 1; i <= 11; i++ {

@@ -14,6 +14,7 @@ import (
 type watchState struct {
 	cfg             Config
 	siteData        *blog.Site
+	components      customComponents
 	lastMod         map[string]time.Time
 	mu              sync.Mutex
 	outDir          string
@@ -29,9 +30,10 @@ type watchState struct {
 }
 
 type watchSnapshot struct {
-	cfg      Config
-	siteData *blog.Site
-	lastMod  map[string]time.Time
+	cfg        Config
+	siteData   *blog.Site
+	components customComponents
+	lastMod    map[string]time.Time
 }
 
 type watchChange struct {
@@ -42,10 +44,11 @@ type watchChange struct {
 	changed bool
 }
 
-func startWatcher(cfg Config, siteData *blog.Site, outDir string, stop <-chan struct{}, store *memStore, liveReload *liveReloadState) {
+func startWatcher(cfg Config, siteData *blog.Site, components customComponents, outDir string, stop <-chan struct{}, store *memStore, liveReload *liveReloadState) {
 	state := &watchState{
 		cfg:             cfg,
 		siteData:        siteData,
+		components:      components,
 		lastMod:         make(map[string]time.Time),
 		outDir:          outDir,
 		store:           store,
@@ -98,6 +101,10 @@ func (s *watchState) scan() {
 		changes = append(changes, change)
 	}
 
+	componentsDir := filepath.Join(snap.cfg.RootDir, "data", "custom_components")
+	componentsChange := s.detectChange(snap, "custom_components_dir", componentsDir, "custom components changed")
+	changes = append(changes, componentsChange)
+
 	aboutDir := filepath.Join(snap.cfg.RootDir, "data", "about_page")
 	changes = append(changes, s.detectChange(snap, "about_page_dir", aboutDir, "about page"))
 
@@ -114,15 +121,18 @@ func (s *watchState) scan() {
 	}
 
 	var newData *blog.Site
-	if siteDataChanged {
-		data, err := loadPreparedSiteForWatch(snap.cfg.RootDir, s.outDir, snap.cfg.SiteConfig, snap.cfg.ArticlesFile, s.store)
+	var newComponents customComponents
+	reloadPrepared := siteDataChanged || componentsChange.changed
+	if reloadPrepared {
+		data, components, err := loadPreparedSiteForWatch(snap.cfg.RootDir, s.outDir, snap.cfg.SiteConfig, snap.cfg.ArticlesFile, s.store)
 		if err != nil {
 			snap.cfg.logf("Watch: reload site data failed: %v\n", err)
 			return
 		}
 		newData = data
+		newComponents = components
 	}
-	reasons := s.applyChanges(changes, newData)
+	reasons := s.applyChanges(changes, newData, newComponents, reloadPrepared)
 	for _, reason := range reasons {
 		s.requestRebuild(reason)
 	}
@@ -135,7 +145,7 @@ func (s *watchState) snapshot() watchSnapshot {
 	for k, v := range s.lastMod {
 		lastMod[k] = v
 	}
-	return watchSnapshot{cfg: s.cfg, siteData: s.siteData, lastMod: lastMod}
+	return watchSnapshot{cfg: s.cfg, siteData: s.siteData, components: s.components, lastMod: lastMod}
 }
 
 func resolveWatchPath(rootDir, path string) string {
@@ -160,11 +170,14 @@ func (s *watchState) detectChange(snap watchSnapshot, key, path, what string) wa
 	}
 }
 
-func (s *watchState) applyChanges(changes []watchChange, newData *blog.Site) []string {
+func (s *watchState) applyChanges(changes []watchChange, newData *blog.Site, newComponents customComponents, componentsChanged bool) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if newData != nil {
 		s.siteData = newData
+	}
+	if componentsChanged {
+		s.components = newComponents
 	}
 	var reasons []string
 	for _, change := range changes {
@@ -187,7 +200,7 @@ func (s *watchState) applyChanges(changes []watchChange, newData *blog.Site) []s
 	return reasons
 }
 
-func (s *watchState) beginRebuild(pending []string) (*blog.Site, []string, uint64) {
+func (s *watchState) beginRebuild(pending []string) (*blog.Site, customComponents, []string, uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	seen := make(map[string]struct{}, len(pending)+len(s.dirtyReasons))
@@ -206,7 +219,7 @@ func (s *watchState) beginRebuild(pending []string) (*blog.Site, []string, uint6
 		seen[reason] = struct{}{}
 		merged = append(merged, reason)
 	}
-	return s.siteData, merged, s.generation
+	return s.siteData, s.components, merged, s.generation
 }
 
 func (s *watchState) finishRebuild(startGeneration uint64, processed []string) {
@@ -268,7 +281,7 @@ func (s *watchState) debouncedRebuild(stop <-chan struct{}) {
 }
 
 func (s *watchState) executeRebuild(pending []string) {
-	siteData, pending, startGeneration := s.beginRebuild(pending)
+	siteData, components, pending, startGeneration := s.beginRebuild(pending)
 	defer s.finishRebuild(startGeneration, pending)
 
 	rebuildIndex := false
@@ -295,6 +308,10 @@ func (s *watchState) executeRebuild(pending []string) {
 			rebuildIndex = true
 			rebuildStaleArticles = true
 		} else if what == "site config changed" {
+			rebuildIndex = true
+			rebuildAbout = true
+			rebuildAllArticles = true
+		} else if what == "custom components changed" {
 			rebuildIndex = true
 			rebuildAbout = true
 			rebuildAllArticles = true
@@ -326,19 +343,19 @@ func (s *watchState) executeRebuild(pending []string) {
 	}
 
 	if rebuildAbout {
-		s.rebuildAboutPage(siteData)
+		s.rebuildAboutPage(siteData, components)
 	}
 
 	if rebuildAllArticles {
-		s.rebuildSiteArticles(siteData, true)
+		s.rebuildSiteArticles(siteData, components, true)
 		return
 	}
 	if rebuildStaleArticles {
-		s.rebuildSiteArticles(siteData, false)
+		s.rebuildSiteArticles(siteData, components, false)
 		return
 	}
 	for _, article := range rebuildArticles {
-		s.rebuildOneArticle(article, siteData)
+		s.rebuildOneArticle(article, siteData, components)
 	}
 }
 
@@ -355,7 +372,7 @@ func writePageMapToDisk(outDir string, pages map[string]string) error {
 	return nil
 }
 
-func (s *watchState) rebuildSiteArticles(siteData *blog.Site, force bool) {
+func (s *watchState) rebuildSiteArticles(siteData *blog.Site, components customComponents, force bool) {
 	cfg := s.cfg
 	cfg.OutDir = s.outDir
 	cfg.Force = force
@@ -365,7 +382,7 @@ func (s *watchState) rebuildSiteArticles(siteData *blog.Site, force bool) {
 	} else {
 		cfg.logf("Watch: checking article pages after metadata change\n")
 	}
-	if _, err := buildSiteArticles(cfg, siteData); err != nil {
+	if _, err := buildSiteArticles(cfg, siteData, components); err != nil {
 		cfg.logf("Watch: rebuild article pages failed: %v\n", err)
 		return
 	}
@@ -379,7 +396,7 @@ func (s *watchState) rebuildSiteArticles(siteData *blog.Site, force bool) {
 	}
 }
 
-func (s *watchState) rebuildAboutPage(siteData *blog.Site) {
+func (s *watchState) rebuildAboutPage(siteData *blog.Site, components customComponents) {
 	aboutDir := filepath.Join(s.cfg.RootDir, "data", "about_page")
 	outPath := filepath.Join(s.outDir, "about", "index.html")
 
@@ -387,6 +404,7 @@ func (s *watchState) rebuildAboutPage(siteData *blog.Site) {
 	opts := render.Options{
 		AssetPrefix: "..",
 		HeaderHTML:  blog.Header(siteData.Config, ".."),
+		FooterHTML:  components.PageFooterHTML,
 		BodyClass:   "site-layout",
 		IconHref:    siteData.Config.Icon,
 	}
@@ -412,7 +430,7 @@ func (s *watchState) rebuildAboutPage(siteData *blog.Site) {
 	s.cfg.flushDocumentLogString("about page", docLog.String())
 }
 
-func (s *watchState) rebuildOneArticle(article blog.Article, siteData *blog.Site) {
+func (s *watchState) rebuildOneArticle(article blog.Article, siteData *blog.Site, components customComponents) {
 	slug := blog.Slugify(article.Slug)
 	outPath := filepath.Join(s.outDir, "articles", filepath.FromSlash(slug), "index.html")
 	sourceDir := filepath.Join(s.cfg.RootDir, filepath.FromSlash(article.Folder))
@@ -426,10 +444,12 @@ func (s *watchState) rebuildOneArticle(article blog.Article, siteData *blog.Site
 	}
 
 	opts := render.Options{
-		AssetPrefix: "../..",
-		HeaderHTML:  blog.Header(siteData.Config, "../.."),
-		BodyClass:   "site-layout",
-		IconHref:    siteData.Config.Icon,
+		AssetPrefix:     "../..",
+		HeaderHTML:      blog.Header(siteData.Config, "../.."),
+		FooterHTML:      components.PageFooterHTML,
+		ArticleStatHTML: components.ArticleStatHTML,
+		BodyClass:       "site-layout",
+		IconHref:        siteData.Config.Icon,
 	}
 
 	htmlText, warnings, _, err := buildArticle(docCfg, input, s.outDir, "articles/"+slug, "../..", opts)

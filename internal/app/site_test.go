@@ -200,6 +200,49 @@ func TestDocumentOutputsFreshUsesHTMLOutputTime(t *testing.T) {
 	}
 }
 
+func TestLoadCustomComponentsWrapsRenderedFragments(t *testing.T) {
+	dir := t.TempDir()
+	componentsDir := filepath.Join(dir, "data", "custom_components")
+	if err := os.MkdirAll(componentsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(componentsDir, "page_footing.tex"), []byte(`\begin{html}<span>site stats</span>\end{html}
+
+Footer paragraph.`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(componentsDir, "article_stat.tex"), []byte(`\begin{html}<span>article stats</span>\end{html}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	components, warnings, err := loadCustomComponents(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", warnings)
+	}
+	for _, want := range []string{
+		`<footer class="custom-page-footing">`,
+		`<span>site stats</span>`,
+		`<p>Footer paragraph.</p>`,
+		`</footer>`,
+	} {
+		if !strings.Contains(components.PageFooterHTML, want) {
+			t.Fatalf("page footer component missing %q:\n%s", want, components.PageFooterHTML)
+		}
+	}
+	for _, want := range []string{
+		`<div class="custom-article-stat">`,
+		`<span>article stats</span>`,
+		`</div>`,
+	} {
+		if !strings.Contains(components.ArticleStatHTML, want) {
+			t.Fatalf("article stat component missing %q:\n%s", want, components.ArticleStatHTML)
+		}
+	}
+}
+
 func TestCopyConfiguredSiteAssetRejectsPathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	outDir := filepath.Join(dir, "out")

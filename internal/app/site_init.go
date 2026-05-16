@@ -61,6 +61,7 @@ func RunSiteInit(cfg SiteInitConfig) error {
 		"articles",
 		"asset/figs",
 		"data/about_page",
+		"data/custom_components",
 		"web/static/fonts",
 	} {
 		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0755); err != nil {
@@ -73,6 +74,8 @@ func RunSiteInit(cfg SiteInitConfig) error {
 		{Path: "data/config.toml", Content: defaultConfigTOML(cfg.Title)},
 		{Path: "data/articles.toml", Content: defaultArticlesTOML},
 		{Path: "data/about_page/main.tex", Content: defaultAboutTex},
+		{Path: "data/custom_components/page_footing.tex", Content: defaultPageFootingTex},
+		{Path: "data/custom_components/article_stat.tex", Content: defaultArticleStatTex},
 		{Path: "asset/figs/circle_example.svg", Content: defaultCircleExampleSVG},
 		{Path: "web/static/fonts.css", Content: defaultInitFontsCSS},
 		{Path: "web/static/chroma-theme.css", Content: highlight.ThemeCSS()},
@@ -419,6 +422,19 @@ const defaultAboutTex = `\begin{document}
 Write your biography here.
 
 \end{document}
+`
+
+const defaultPageFootingTex = `\begin{html}
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<span id="busuanzi_container_site_pv">&#26412;&#31449;&#24635;&#35775;&#38382;&#37327; <span id="busuanzi_value_site_pv"></span> &#27425;</span>
+<span aria-hidden="true"> &middot; </span>
+<span id="busuanzi_container_site_uv">&#26412;&#31449;&#35775;&#23458;&#25968; <span id="busuanzi_value_site_uv"></span> &#20154;</span>
+\end{html}
+`
+
+const defaultArticleStatTex = `\begin{html}
+<span id="busuanzi_container_page_pv">&#26412;&#25991;&#38405;&#35835;&#37327; <span id="busuanzi_value_page_pv"></span> &#27425;</span>
+\end{html}
 `
 
 const defaultInitFontsCSS = `@font-face {
