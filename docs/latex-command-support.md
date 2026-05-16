@@ -38,7 +38,7 @@ MetaBlog 对 LaTeX 的支持分为三类：
 | 公式 | `$...$`、`\(...\)`、`\[...\]`、`$$...$$`、`equation`、`align`、`aligned` 等 | 支持边界、编号和 KaTeX 渲染。 |
 | 文本样式 | 粗体、斜体、颜色、字号、对齐声明等 | 支持常见命令。 |
 | 链接 | `\url`、`\href` | 支持，危险协议降级。 |
-| 原样文本 | `verbatim`、`lstlisting`、`minted`、`\verb` | 支持为代码文本框。 |
+| 原样文本 | `verbatim`、`lstlisting`、`minted`、`\verb`、`html`、`\importHTML` | 代码环境支持为代码文本框；`html` 和 `\importHTML` 原样输出。 |
 | 自定义框 | `tcb` | 支持可折叠标题文本框。 |
 | 条件编译 | `\iffalse...\fi` | 暂不支持。 |
 | 宏展开 | `\newcommand`、`\def` 等 | 暂不支持完整宏展开。 |
@@ -76,9 +76,26 @@ MetaBlog 只处理：
 6. 重复 input/include 会记录 warning，但不会自动去重。
 7. 只支持 `{...}` 参数格式。
 8. `\includegraphics` 不会被误识别为 `\include`。
-9. 原样环境和 `\verb` 内部的 input/include 不会展开。
+9. 原样环境、`html` 环境和 `\verb` 内部的 input/include 不会展开。
 
-### 3.3 `%` 注释
+### 3.3 `\importHTML{...}`
+
+`\importHTML{...}` 用于显式导入外部 HTML 片段：
+
+```latex
+\importHTML{partials/profile-card.html}
+```
+
+规则：
+
+1. 参数是 HTML 文件相对于主文件所在目录的路径。
+2. 路径必须是相对路径，不能是绝对路径，也不能通过 `..` 逃出主文件目录。
+3. 文件内容会按原始 HTML 直接嵌入最终页面，不做 HTML escape 或安全清洗。
+4. 如果文件不存在或路径不允许，会记录 warning，并跳过该导入。
+5. 如果文件内容不像 HTML，会记录 warning，但仍按原样嵌入。
+6. 该命令等价于把目标文件内容手动写进 `\begin{html}...\end{html}`。
+
+### 3.4 `%` 注释
 
 支持：
 
@@ -92,7 +109,7 @@ MetaBlog 只处理：
 1. 行首或只有空白前缀的 `%` 视为整行注释，整行删除且不留下空行。
 2. 行内 `%` 删除该行 `%` 后内容，但保留换行。
 3. `\%` 保留为文本百分号。
-4. `verbatim`、`lstlisting`、`minted` 和 `\verb` 内部的 `%` 不作为注释。
+4. `verbatim`、`lstlisting`、`minted`、`html` 和 `\verb` 内部的 `%` 不作为注释。
 
 暂不处理：
 
@@ -322,6 +339,40 @@ print("hello")
 ### 8.5 `\verb`
 
 `\verb` 内容作为原样 inline 片段保护，不会参与注释和 input/include 解析。
+
+### 8.6 `html`
+
+```latex
+\begin{html}
+<div class="custom-block">
+  <strong>Raw HTML</strong>
+</div>
+\end{html}
+```
+
+`html` 环境中的内容会作为原始 HTML 片段直接写入最终文章页面，不进行 LaTeX 命令解析，也不会进行 HTML escape。该环境和 `verbatim`、`lstlisting`、`minted` 一样会在词法层作为原样环境保护，因此内部的 `%`、`\input{...}`、`\include{...}` 不会被当作 LaTeX 注释或输入命令处理。
+
+**重要限制**：`html` 环境内部的 `\input{...}` 和 `\include{...}` 不会导入外部文件，而是会作为普通文本原样保留到输出 HTML 中。这一点和 LaTeX 的逐字类环境一致：原样环境的核心语义是保护内部内容不再被解析。如果需要复用外部 HTML 片段，当前版本应先在构建前把内容合并进 `html` 环境，或后续新增专门的显式导入语义；不要期待普通 `\input` 在 `html` 环境内部生效。
+
+例如：
+
+```latex
+\begin{html}
+\input{snippet.html}
+\end{html}
+```
+
+输出中会保留字面量 `\input{snippet.html}`，不会读取 `snippet.html` 文件。
+
+需要从外部文件导入 HTML 时，应使用 `\importHTML{...}`：
+
+```latex
+\importHTML{snippet.html}
+```
+
+`\importHTML{...}` 是普通块级命令，不是 raw 环境内部命令。它会读取相对于主文件的 HTML 文件，并把文件内容作为 `RawHTML` 节点嵌入页面。
+
+该环境只适合写入可信 HTML。MetaBlog 不会清洗 `html` 环境中的标签、属性或脚本。
 
 ## 9. 可折叠文本框 `tcb`
 
@@ -630,13 +681,21 @@ See Fig.~\ref{fig:example}
 
 支持：
 
-```latex
-\textbf{...}
-\textit{...}
-\emph{...}
-\textrm{...}
-\underline{...}
-```
+| 命令 | 渲染语义 |
+| --- | --- |
+| `\textbf{...}` | 加粗。 |
+| `\textit{...}` / `\emph{...}` | 斜体。 |
+| `\texttt{...}` | 等宽/打字机字体。首选项目内置的开源 Source Code Pro，并保留 Consolas、Liberation Mono、Courier New 等系统回退字体。 |
+| `\textrm{...}` | 罗马/衬线字体，使用正文罗马字体栈。 |
+| `\textsf{...}` | 无衬线字体，使用项目已有 HarmonyOS Sans / Source Han Sans 字体栈。 |
+| `\textsc{...}` | 小型大写，使用 CSS `font-variant: small-caps`。 |
+| `\textsl{...}` | 倾斜体，使用 CSS `font-style: oblique`。 |
+| `\textup{...}` | upright，局部复位为正常字形。 |
+| `\textmd{...}` | medium，局部复位为正常字重。 |
+| `\textnormal{...}` | 局部复位为正文罗马字体、正常字形、正常字重和普通字形变体。 |
+| `\underline{...}` | 下划线。 |
+
+这些命令暂不引入新增字体文件；如果后续需要更完整的小型大写或斜体字形支持，应先选择开源字体并经过字体方案审核。
 
 ### 15.2 声明式样式
 
@@ -651,23 +710,21 @@ See Fig.~\ref{fig:example}
 
 当前支持：
 
-```latex
-\color{...}
-\pagecolor{...}
-\backgroundcolor{...}
-\bgcolor{...}
-\bfseries
-\bf
-\itshape
-\it
-\em
-\ttfamily
-\tt
-\normalfont
-\upshape
-\underline
-\ul
-```
+| 声明 | 作用 |
+| --- | --- |
+| `\color{...}` | 设置文字颜色。 |
+| `\pagecolor{...}` / `\backgroundcolor{...}` / `\bgcolor{...}` | 设置背景色。 |
+| `\bfseries` / `\bf` | 加粗。 |
+| `\itshape` / `\it` / `\em` | 斜体。 |
+| `\ttfamily` / `\tt` | 等宽/打字机字体。 |
+| `\rmfamily` | 罗马/衬线字体。 |
+| `\sffamily` | 无衬线字体。 |
+| `\scshape` | 小型大写。 |
+| `\slshape` | 倾斜体。 |
+| `\mdseries` | 正常字重。 |
+| `\normalfont` | 复位为正文罗马字体、正常字形、正常字重和普通字形变体。 |
+| `\upshape` | 复位为正常字形。 |
+| `\underline` / `\ul` | 下划线。 |
 
 ### 15.3 字号命令
 
@@ -929,7 +986,7 @@ text
 
 ### 19.2 未知环境
 
-未知环境会记录 warning，并作为透明 block 保留内部可解析内容。也就是说，环境本身不产生特殊 HTML 外壳，但内部段落、章节、列表等仍会继续解析。
+未知环境会记录 warning，并作为透明 block 保留内部可解析内容。也就是说，环境本身不产生特殊 HTML 外壳，但内部段落、章节、列表等仍会继续解析。`html` 不是未知环境，它会作为原始 HTML 块直接输出，内部内容不会继续解析。
 
 ### 19.3 条件编译
 

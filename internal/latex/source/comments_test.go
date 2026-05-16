@@ -43,10 +43,13 @@ func TestStripCommentsProtectsRawEnvironments(t *testing.T) {
 \begin{minted}{go}
 fmt.Println("300% remains")
 \end{minted}
+\begin{html}
+<div data-rate="400%">HTML percent remains</div>
+\end{html}
 After % comment`
 
 	got := StripComments(in)
-	for _, want := range []string{"100% remains", "200% remains", "300% remains"} {
+	for _, want := range []string{"100% remains", "200% remains", "300% remains", `data-rate="400%"`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("raw environment content was stripped; missing %q in:\n%s", want, got)
 		}

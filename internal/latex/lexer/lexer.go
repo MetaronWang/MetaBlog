@@ -187,7 +187,7 @@ func beginEnvironmentAt(s string, i int) (string, int, bool) {
 
 func isRawEnvironment(env string) bool {
 	switch env {
-	case "verbatim", "lstlisting", "minted":
+	case "verbatim", "lstlisting", "minted", "html":
 		return true
 	default:
 		return false

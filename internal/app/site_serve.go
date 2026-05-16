@@ -40,7 +40,7 @@ type SiteServeConfig struct {
 	Force          bool
 	NoLaTeXMLCache bool
 
-	// OnlyRAM: serve and rebuild entirely in memory (no disk writes for output).
+	// OnlyRAM: serve and watch rebuilds entirely in memory after startup.
 	OnlyRAM bool
 }
 

@@ -51,8 +51,19 @@ func (s *liveReloadState) Version(path string) uint64 {
 	}
 	clean := normalizeReloadPath(path)
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.versions[clean]
+	v, ok := s.versions[clean]
+	s.mu.RUnlock()
+	if ok {
+		return v
+	}
+	if decoded, err := url.PathUnescape(path); err == nil && decoded != path {
+		clean = normalizeReloadPath(decoded)
+		s.mu.RLock()
+		v = s.versions[clean]
+		s.mu.RUnlock()
+		return v
+	}
+	return 0
 }
 
 type liveReloadHandler struct {
@@ -188,9 +199,10 @@ func injectLiveReloadScript(page string, initialVersion uint64) string {
 }
 
 func stripLiveReloadScripts(page string) string {
+	lower := strings.ToLower(page)
+	offset := 0
 	for {
-		lower := strings.ToLower(page)
-		start := strings.Index(lower, "<script")
+		start := findNextScriptTag(lower, offset)
 		if start < 0 {
 			return page
 		}
@@ -206,18 +218,43 @@ func stripLiveReloadScripts(page string) string {
 		block := page[start:end]
 		if strings.Contains(block, liveReloadEndpoint) {
 			page = page[:start] + page[end:]
+			lower = strings.ToLower(page)
+			offset = start
 			continue
 		}
-		nextStart := end
-		rest := stripLiveReloadScripts(page[nextStart:])
-		return page[:nextStart] + rest
+		offset = end
+	}
+}
+
+func findNextScriptTag(s string, offset int) int {
+	for offset < len(s) {
+		idx := strings.Index(s[offset:], "<script")
+		if idx < 0 {
+			return -1
+		}
+		idx += offset
+		if isScriptTagStart(s, idx) {
+			return idx
+		}
+		offset = idx + len("<script")
+	}
+	return -1
+}
+
+func isScriptTagStart(s string, start int) bool {
+	after := start + len("<script")
+	if after >= len(s) {
+		return true
+	}
+	switch s[after] {
+	case '>', '/', ' ', '\t', '\n', '\r', '\f':
+		return true
+	default:
+		return false
 	}
 }
 
 func normalizeReloadPath(path string) string {
-	if decoded, err := url.PathUnescape(path); err == nil {
-		path = decoded
-	}
 	clean := cleanMemPath(path)
 	if clean == "" {
 		return "index.html"

@@ -324,7 +324,7 @@ func (r *Renderer) number(doc *ast.Document) {
 					walkTableContent(sub.Blocks)
 				}
 			case *ast.DisplayMath:
-				if n.NoNumber || !n.Numbered {
+				if !n.Numbered {
 					n.Number = ""
 					n.AnchorID = anchor(n.Label, "equation")
 					if n.Label != "" {
@@ -599,6 +599,8 @@ func (r *Renderer) renderBlocks(b *strings.Builder, blocks []ast.Block) {
 			b.WriteString(`</div></details>`)
 		case *ast.CodeBlock:
 			r.renderCodeBlock(b, n)
+		case *ast.RawHTML:
+			b.WriteString(n.HTML)
 		case *ast.ComplexHTML:
 			if n.Number != "" {
 				b.WriteString(`<section id="`)
@@ -1231,14 +1233,14 @@ func inlineStyle(n *ast.Styled) string {
 	if n == nil {
 		return ""
 	}
-	return styleString(n.Color, n.Background, n.FontSize, "", n.Underline, n.Bold, n.Italic, n.Mono)
+	return styleString(n.Color, n.Background, n.FontSize, "", n.FontFamily, n.FontStyle, n.FontWeight, n.FontVariant, n.Underline, n.Bold, n.Italic, n.Mono)
 }
 
 func blockStyle(n *ast.StyledBlock) string {
 	if n == nil {
 		return ""
 	}
-	return styleString(n.Color, n.Background, n.FontSize, n.Align, n.Underline, n.Bold, n.Italic, n.Mono)
+	return styleString(n.Color, n.Background, n.FontSize, n.Align, n.FontFamily, n.FontStyle, n.FontWeight, n.FontVariant, n.Underline, n.Bold, n.Italic, n.Mono)
 }
 
 func tcbStyle(n *ast.TCB) string {
@@ -1261,7 +1263,7 @@ func tcbStyle(n *ast.TCB) string {
 	return "--tcb-title-bg: " + titleBg + "; --tcb-border: " + border + "; --tcb-title-color: " + border + "; --tcb-body-bg: " + bodyBg + "; --tcb-title-align: " + align + ";"
 }
 
-func styleString(color, background, fontSize, align string, underline, bold, italic, mono bool) string {
+func styleString(color, background, fontSize, align, fontFamily, fontStyle, fontWeight, fontVariant string, underline, bold, italic, mono bool) string {
 	var parts []string
 	if color != "" {
 		parts = append(parts, "color: "+color)
@@ -1278,19 +1280,44 @@ func styleString(color, background, fontSize, align string, underline, bold, ita
 	if underline {
 		parts = append(parts, "text-decoration: underline")
 	}
-	if bold {
-		parts = append(parts, "font-weight: 700")
+	if bold && fontWeight == "" {
+		fontWeight = "700"
 	}
-	if italic {
-		parts = append(parts, "font-style: italic")
+	if fontWeight != "" {
+		parts = append(parts, "font-weight: "+fontWeight)
 	}
-	if mono {
-		parts = append(parts, `font-family: Consolas, "Liberation Mono", "Courier New", monospace`)
+	if italic && fontStyle == "" {
+		fontStyle = "italic"
+	}
+	if fontStyle != "" {
+		parts = append(parts, "font-style: "+fontStyle)
+	}
+	if mono && fontFamily == "" {
+		fontFamily = "mono"
+	}
+	if family := fontFamilyStyle(fontFamily); family != "" {
+		parts = append(parts, "font-family: "+family)
+	}
+	if fontVariant != "" {
+		parts = append(parts, "font-variant: "+fontVariant)
 	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return strings.Join(parts, "; ") + ";"
+}
+
+func fontFamilyStyle(fontFamily string) string {
+	switch fontFamily {
+	case "serif":
+		return `"TeX Gyre Pagella", "Source Han Serif SC", "Noto Serif CJK SC", "Source Han Serif CN", "Noto Serif SC", "Songti SC", SimSun, Georgia, serif`
+	case "sans":
+		return `"HarmonyOS Sans", "HarmonyOS Sans SC", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", Arial, sans-serif`
+	case "mono":
+		return `"Source Code Pro", Consolas, "Liberation Mono", "Courier New", monospace`
+	default:
+		return ""
+	}
 }
 
 func alignStyle(align string) string {

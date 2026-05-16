@@ -209,6 +209,17 @@ func TestInjectLiveReloadScriptReplacesOldInjectedScript(t *testing.T) {
 	}
 }
 
+func TestStripLiveReloadScriptsIgnoresScriptPrefixTags(t *testing.T) {
+	page := `<html><body><scripting>` + liveReloadEndpoint + `</script></scripting><main>content</main></body></html>`
+	got := injectLiveReloadScript(page, 7)
+	if !strings.Contains(got, `<scripting>`+liveReloadEndpoint+`</script></scripting>`) {
+		t.Fatalf("script-prefix tag was stripped or changed:\n%s", got)
+	}
+	if strings.Count(got, liveReloadEndpoint) != 2 {
+		t.Fatalf("expected original text plus injected endpoint, got:\n%s", got)
+	}
+}
+
 func TestLiveReloadVersionNormalizesEscapedUnicodePath(t *testing.T) {
 	state := newLiveReloadState()
 	slug := "\u9ad8\u65af\u8fc7\u7a0b"
@@ -217,6 +228,18 @@ func TestLiveReloadVersionNormalizesEscapedUnicodePath(t *testing.T) {
 	escaped := "/articles/" + url.PathEscape(slug) + "/"
 	if got, want := state.Version(escaped), state.Version("/articles/"+slug+"/"); got != want || got == 0 {
 		t.Fatalf("escaped path version mismatch: got %d, want %d", got, want)
+	}
+}
+
+func TestLiveReloadVersionDoesNotDoubleDecodeLiteralPercentPath(t *testing.T) {
+	state := newLiveReloadState()
+	state.MarkUpdated("articles/test%41/index.html")
+
+	if got := state.Version("/articles/test%41/"); got == 0 {
+		t.Fatal("literal percent path did not match exact updated path")
+	}
+	if got := state.Version("/articles/testA/"); got != 0 {
+		t.Fatalf("double-decoded path unexpectedly matched literal percent path: %d", got)
 	}
 }
 

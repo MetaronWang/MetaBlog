@@ -191,6 +191,34 @@ func (p *inlineParser) readCommandInline(tok lexer.Token) ([]ast.Inline, string,
 		if arg, ok := p.readCommandArg(tok.Value); ok {
 			return []ast.Inline{&ast.Italic{Children: p.parseTextArgument(arg)}}, "", true
 		}
+	case "texttt":
+		if arg, ok := p.readCommandArg("texttt"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), Mono: true}}, "", true
+		}
+	case "textsf":
+		if arg, ok := p.readCommandArg("textsf"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontFamily: "sans"}}, "", true
+		}
+	case "textsc":
+		if arg, ok := p.readCommandArg("textsc"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontVariant: "small-caps"}}, "", true
+		}
+	case "textsl":
+		if arg, ok := p.readCommandArg("textsl"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontStyle: "oblique"}}, "", true
+		}
+	case "textup":
+		if arg, ok := p.readCommandArg("textup"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontStyle: "normal"}}, "", true
+		}
+	case "textmd":
+		if arg, ok := p.readCommandArg("textmd"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontWeight: "400"}}, "", true
+		}
+	case "textnormal":
+		if arg, ok := p.readCommandArg("textnormal"); ok {
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontFamily: "serif", FontStyle: "normal", FontWeight: "400", FontVariant: "normal"}}, "", true
+		}
 	case "textcolor":
 		if color, ok := p.readCommandArg("textcolor"); ok {
 			if arg, ok := p.readNextBraceArg(); ok {
@@ -268,7 +296,7 @@ func (p *inlineParser) readCommandInline(tok lexer.Token) ([]ast.Inline, string,
 		}
 	case "textrm":
 		if arg, ok := p.readCommandArg("textrm"); ok {
-			return p.parseTextArgument(arg), "", true
+			return []ast.Inline{&ast.Styled{Children: p.parseTextArgument(arg), FontFamily: "serif"}}, "", true
 		}
 	case "LaTeX":
 		p.i = tok.End
@@ -477,6 +505,9 @@ func findUnescapedSequence(s string, start int, seq string) int {
 }
 
 func findInlineDollarEnd(s string, start int) int {
+	if start < len(s) && s[start] == '$' {
+		return -1
+	}
 	for i := start; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
@@ -592,16 +623,48 @@ func readTextDeclarations(s string) textDeclarations {
 			decl.HasDeclarations = true
 		case "bfseries", "bf":
 			style.Bold = true
+			style.FontWeight = ""
 			i = next
 			decl.HasStyle = true
 			decl.HasDeclarations = true
 		case "itshape", "it", "em":
 			style.Italic = true
+			style.FontStyle = ""
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "slshape":
+			style.Italic = false
+			style.FontStyle = "oblique"
 			i = next
 			decl.HasStyle = true
 			decl.HasDeclarations = true
 		case "ttfamily", "tt":
 			style.Mono = true
+			style.FontFamily = ""
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "rmfamily":
+			style.Mono = false
+			style.FontFamily = "serif"
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "sffamily":
+			style.Mono = false
+			style.FontFamily = "sans"
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "scshape":
+			style.FontVariant = "small-caps"
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "mdseries":
+			style.Bold = false
+			style.FontWeight = "400"
 			i = next
 			decl.HasStyle = true
 			decl.HasDeclarations = true
@@ -610,10 +673,20 @@ func readTextDeclarations(s string) textDeclarations {
 			i = next
 			decl.HasStyle = true
 			decl.HasDeclarations = true
-		case "normalfont", "upshape":
+		case "upshape":
+			style.Italic = false
+			style.FontStyle = "normal"
+			i = next
+			decl.HasStyle = true
+			decl.HasDeclarations = true
+		case "normalfont":
 			style.Bold = false
 			style.Italic = false
 			style.Mono = false
+			style.FontFamily = "serif"
+			style.FontStyle = "normal"
+			style.FontWeight = "400"
+			style.FontVariant = "normal"
 			style.FontSize = ""
 			i = next
 			decl.HasStyle = true

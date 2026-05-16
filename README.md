@@ -221,13 +221,13 @@ metablog site serve -out out -watch -root .
 
 #### 纯内存模式（Only-RAM）
 
-启用 `-only-ram` 将所有输出操作移入内存，避免频繁写入硬盘：
+启用 `-only-ram` 将预览服务和后续热更新移入内存，避免频繁写入硬盘：
 
 ```bash
 metablog site serve -out out -watch -root . -only-ram
 ```
 
-页面和资源更新仅写入内存映射，LaTeXML 缓存仍落盘但自动启用有界内存读缓存。详见 [CLI 使用文档](docs/cli-usage.md#纯内存模式only-ram)。
+页面和资源更新仅写入内存映射，LaTeXML 缓存仍落盘但自动启用有界内存读缓存。若同时启用 `-initial-build`，启动前的全量构建仍会先写入 `out/` 一次，随后再加载到内存；HTTP 服务和 watch 后续更新仍从内存读写。详见 [CLI 使用文档](docs/cli-usage.md#纯内存模式only-ram)。
 
 ### 构建单篇 LaTeX 文档
 
@@ -396,7 +396,8 @@ MetaBlog 不是完整 TeX 引擎。它采用两层策略：
 - 递归展开 `\input{...}` 和 `\include{...}`，当前两者等价。
 - 自动为无扩展名 input/include 补 `.tex`。
 - 检测循环 input/include 并记录 warning。
-- `verbatim`、`lstlisting`、`minted` 和 `\verb` 中的内容不会被当作注释或 input/include 解析。
+- `verbatim`、`lstlisting`、`minted`、`html` 和 `\verb` 中的内容不会被当作注释或 input/include 解析。
+- `\importHTML{relative/path.html}` 会读取相对于主文件的 HTML 片段，并作为原始 HTML 嵌入页面。
 
 ### 文档元信息
 
@@ -431,11 +432,12 @@ MetaBlog 不是完整 TeX 引擎。它采用两层策略：
 支持：
 
 - 行内公式：`$...$`、`\(...\)`
-- 块级公式：`\[...\]`
+- 块级公式：`\[...\]`、`$$...$$`
 - `equation` / `equation*`
 - `align` / `align*`
+- 常见内部数学环境：`aligned`、`alignedat`、`gathered`、`split`、矩阵环境等
 
-公式渲染交给 KaTeX。MetaBlog 负责公式块识别、编号和交叉引用。
+公式渲染交给 KaTeX。MetaBlog 负责公式块识别、编号和交叉引用。`\[...\]`、`$$...$$`、`equation*`、`align*` 和内部数学环境 fallback 不编号；`equation` / `align` 默认编号。
 
 ### 图片和表格
 
@@ -467,8 +469,9 @@ MetaBlog 不是完整 TeX 引擎。它采用两层策略：
 
 支持常见 inline 命令，包括：
 
-- 字体样式：`\textbf`、`\textit`、`\emph`、`\underline` 等。
+- 字体样式：`\textbf`、`\textit`、`\emph`、`\texttt`、`\textrm`、`\textsf`、`\textsc`、`\textsl`、`\textup`、`\textmd`、`\textnormal`、`\underline` 等。
 - 声明式样式：`\tiny`、`\scriptsize`、`\footnotesize`、`\small`、`\normalsize`、`\large`、`\Large`、`\LARGE`、`\huge`、`\Huge`。
+- 字体族和字形声明：`\ttfamily`、`\rmfamily`、`\sffamily`、`\scshape`、`\slshape`、`\mdseries`、`\normalfont`、`\upshape` 等。
 - 对齐声明：`\centering` 等。
 - 颜色：`\color{...}`、`\textcolor{...}{...}`。
 - 链接：`\url{...}`、`\href{url}{text}`。
@@ -483,8 +486,10 @@ MetaBlog 不是完整 TeX 引擎。它采用两层策略：
 - `verbatim`
 - `lstlisting`
 - `minted`
+- `html`：原始 HTML 片段，直接写入最终页面，不做 escape 或安全清洗。
+- `\importHTML{...}`：导入相对于主文件的外部 HTML 片段，并按原始 HTML 输出。
 
-`lstlisting` 和 `minted` 当前按普通代码文本框渲染，暂不做语法高亮。
+`lstlisting` 和 `minted` 会渲染为带标题栏、行号、复制、折叠、自动换行切换和 Chroma 语法高亮的代码框。`html` 环境和 `\importHTML` 只适合可信内容；`\importHTML` 会检查目标文件是否存在，并在内容不像 HTML 时记录 warning。
 
 未知 inline 命令和未知环境会记录 warning。未知环境会作为透明块保留内部可解析内容。
 

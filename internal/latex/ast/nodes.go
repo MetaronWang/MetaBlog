@@ -58,15 +58,19 @@ type Paragraph struct {
 func (*Paragraph) BlockKind() string { return "paragraph" }
 
 type StyledBlock struct {
-	Color      string  `json:"color,omitempty"`
-	Background string  `json:"background,omitempty"`
-	Align      string  `json:"align,omitempty"`
-	Underline  bool    `json:"underline,omitempty"`
-	Bold       bool    `json:"bold,omitempty"`
-	Italic     bool    `json:"italic,omitempty"`
-	Mono       bool    `json:"mono,omitempty"`
-	FontSize   string  `json:"fontSize,omitempty"`
-	Children   []Block `json:"children,omitempty"`
+	Color       string  `json:"color,omitempty"`
+	Background  string  `json:"background,omitempty"`
+	Align       string  `json:"align,omitempty"`
+	Underline   bool    `json:"underline,omitempty"`
+	Bold        bool    `json:"bold,omitempty"`
+	Italic      bool    `json:"italic,omitempty"`
+	Mono        bool    `json:"mono,omitempty"`
+	FontSize    string  `json:"fontSize,omitempty"`
+	FontFamily  string  `json:"fontFamily,omitempty"`
+	FontStyle   string  `json:"fontStyle,omitempty"`
+	FontWeight  string  `json:"fontWeight,omitempty"`
+	FontVariant string  `json:"fontVariant,omitempty"`
+	Children    []Block `json:"children,omitempty"`
 }
 
 func (*StyledBlock) BlockKind() string { return "styledBlock" }
@@ -94,7 +98,6 @@ type DisplayMath struct {
 	TeX      string `json:"tex"`
 	Label    string `json:"label,omitempty"`
 	Numbered bool   `json:"numbered,omitempty"`
-	NoNumber bool   `json:"noNumber,omitempty"`
 	Number   string `json:"number,omitempty"`
 	AnchorID string `json:"anchorId,omitempty"`
 }
@@ -160,6 +163,12 @@ type CodeBlock struct {
 }
 
 func (*CodeBlock) BlockKind() string { return "codeBlock" }
+
+type RawHTML struct {
+	HTML string `json:"html"`
+}
+
+func (*RawHTML) BlockKind() string { return "rawHTML" }
 
 type Subfigure struct {
 	ImageIndex int      `json:"imageIndex"`
@@ -229,14 +238,18 @@ type Italic struct {
 func (*Italic) InlineKind() string { return "italic" }
 
 type Styled struct {
-	Children   []Inline `json:"children"`
-	Color      string   `json:"color,omitempty"`
-	Background string   `json:"background,omitempty"`
-	Underline  bool     `json:"underline,omitempty"`
-	Bold       bool     `json:"bold,omitempty"`
-	Italic     bool     `json:"italic,omitempty"`
-	Mono       bool     `json:"mono,omitempty"`
-	FontSize   string   `json:"fontSize,omitempty"`
+	Children    []Inline `json:"children"`
+	Color       string   `json:"color,omitempty"`
+	Background  string   `json:"background,omitempty"`
+	Underline   bool     `json:"underline,omitempty"`
+	Bold        bool     `json:"bold,omitempty"`
+	Italic      bool     `json:"italic,omitempty"`
+	Mono        bool     `json:"mono,omitempty"`
+	FontSize    string   `json:"fontSize,omitempty"`
+	FontFamily  string   `json:"fontFamily,omitempty"`
+	FontStyle   string   `json:"fontStyle,omitempty"`
+	FontWeight  string   `json:"fontWeight,omitempty"`
+	FontVariant string   `json:"fontVariant,omitempty"`
 }
 
 func (*Styled) InlineKind() string { return "styled" }

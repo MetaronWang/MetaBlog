@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -257,6 +259,83 @@ func TestFontSizeDeclarations(t *testing.T) {
 	}
 }
 
+func TestTextTTCommandUsesMonoStyle(t *testing.T) {
+	inlines := ParseInline(`Use \texttt{fmt.Println("hi")} here.`)
+	if len(inlines) != 3 {
+		t.Fatalf("unexpected inline nodes: %#v", inlines)
+	}
+	mono, ok := inlines[1].(*ast.Styled)
+	if !ok || !mono.Mono {
+		t.Fatalf("texttt command did not produce mono style: %#v", inlines[1])
+	}
+	if blockInlineText(mono.Children) != `fmt.Println("hi")` {
+		t.Fatalf("texttt content changed: %#v", mono.Children)
+	}
+}
+
+func TestFontStyleCommandsUseStyledInline(t *testing.T) {
+	tests := []struct {
+		src         string
+		fontFamily  string
+		fontStyle   string
+		fontWeight  string
+		fontVariant string
+	}{
+		{src: `\textrm{roman}`, fontFamily: "serif"},
+		{src: `\textsf{sans}`, fontFamily: "sans"},
+		{src: `\textsc{caps}`, fontVariant: "small-caps"},
+		{src: `\textsl{slanted}`, fontStyle: "oblique"},
+		{src: `\textup{upright}`, fontStyle: "normal"},
+		{src: `\textmd{medium}`, fontWeight: "400"},
+		{src: `\textnormal{normal}`, fontFamily: "serif", fontStyle: "normal", fontWeight: "400", fontVariant: "normal"},
+	}
+	for _, tt := range tests {
+		inlines := ParseInline(tt.src)
+		if len(inlines) != 1 {
+			t.Fatalf("%s parsed to unexpected inline nodes: %#v", tt.src, inlines)
+		}
+		styled, ok := inlines[0].(*ast.Styled)
+		if !ok {
+			t.Fatalf("%s parsed as %T, want *ast.Styled", tt.src, inlines[0])
+		}
+		if styled.FontFamily != tt.fontFamily || styled.FontStyle != tt.fontStyle ||
+			styled.FontWeight != tt.fontWeight || styled.FontVariant != tt.fontVariant {
+			t.Fatalf("%s style mismatch: %#v", tt.src, styled)
+		}
+	}
+}
+
+func TestFontStyleDeclarations(t *testing.T) {
+	inlines := ParseInline(`{\sffamily sans} {\scshape caps} {\slshape slant} {\mdseries medium} {\rmfamily roman} {\normalfont normal}`)
+	if len(inlines) != 11 {
+		t.Fatalf("unexpected inline nodes: %#v", inlines)
+	}
+	cases := []struct {
+		idx         int
+		fontFamily  string
+		fontStyle   string
+		fontWeight  string
+		fontVariant string
+	}{
+		{idx: 0, fontFamily: "sans"},
+		{idx: 2, fontVariant: "small-caps"},
+		{idx: 4, fontStyle: "oblique"},
+		{idx: 6, fontWeight: "400"},
+		{idx: 8, fontFamily: "serif"},
+		{idx: 10, fontFamily: "serif", fontStyle: "normal", fontWeight: "400", fontVariant: "normal"},
+	}
+	for _, tt := range cases {
+		styled, ok := inlines[tt.idx].(*ast.Styled)
+		if !ok {
+			t.Fatalf("inline %d parsed as %T, want *ast.Styled", tt.idx, inlines[tt.idx])
+		}
+		if styled.FontFamily != tt.fontFamily || styled.FontStyle != tt.fontStyle ||
+			styled.FontWeight != tt.fontWeight || styled.FontVariant != tt.fontVariant {
+			t.Fatalf("inline %d style mismatch: %#v", tt.idx, styled)
+		}
+	}
+}
+
 func TestParseURLAndHrefCommands(t *testing.T) {
 	inlines := ParseInline(`See \url{https://example.com/a\_b?x=1\&y=2} and \href{mailto:test@example.com}{\small Email us}.`)
 	if len(inlines) != 5 {
@@ -437,6 +516,104 @@ After.`, nil, "main.tex", ".")
 	}
 	if blockText(doc.Children[0]) != "Before." || blockText(doc.Children[2]) != "After." {
 		t.Fatalf("surrounding paragraphs changed: %#v", doc.Children)
+	}
+}
+
+func TestHTMLEnvironmentBecomesRawHTMLBlock(t *testing.T) {
+	doc, err := Parse(`Before.
+
+\begin{html}
+<section class="custom">
+  <h2>\section{Not A Section}</h2>
+  <p>100% remains and \input{hidden}</p>
+</section>
+\end{html}
+
+After.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 3 {
+		t.Fatalf("expected paragraph, raw html, paragraph; got %#v", doc.Children)
+	}
+	raw, ok := doc.Children[1].(*ast.RawHTML)
+	if !ok {
+		t.Fatalf("middle block is %T, want *ast.RawHTML", doc.Children[1])
+	}
+	for _, want := range []string{`<section class="custom">`, `\section{Not A Section}`, `100% remains`, `\input{hidden}`} {
+		if !strings.Contains(raw.HTML, want) {
+			t.Fatalf("raw HTML missing %q: %#v", want, raw)
+		}
+	}
+	if blockText(doc.Children[0]) != "Before." || blockText(doc.Children[2]) != "After." {
+		t.Fatalf("surrounding paragraphs changed: %#v", doc.Children)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("html environment should not emit parser warnings: %#v", doc.Warnings)
+	}
+}
+
+func TestImportHTMLCommandEmbedsRawHTMLFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "partials"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	htmlPath := filepath.Join(dir, "partials", "snippet.html")
+	htmlBody := `<aside class="note"><strong>Raw HTML</strong></aside>`
+	if err := os.WriteFile(htmlPath, []byte(htmlBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(dir, "main.tex")
+	doc, err := Parse(`Before.
+
+\importHTML{partials/snippet.html}
+
+After.`, nil, inputPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 3 {
+		t.Fatalf("expected paragraph, raw html, paragraph; got %#v", doc.Children)
+	}
+	raw, ok := doc.Children[1].(*ast.RawHTML)
+	if !ok {
+		t.Fatalf("middle block is %T, want *ast.RawHTML", doc.Children[1])
+	}
+	if raw.HTML != htmlBody {
+		t.Fatalf("imported HTML changed: %q", raw.HTML)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("importHTML emitted unexpected warnings: %#v", doc.Warnings)
+	}
+}
+
+func TestImportHTMLCommandWarnsForMissingAndNonHTMLFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "plain.txt"), []byte("plain text"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(dir, "main.tex")
+	doc, err := Parse(`\importHTML{missing.html}
+
+\importHTML{plain.txt}`, nil, inputPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected non-HTML import to still emit RawHTML, got %#v", doc.Children)
+	}
+	raw, ok := doc.Children[0].(*ast.RawHTML)
+	if !ok || raw.HTML != "plain text" {
+		t.Fatalf("non-HTML import should be embedded as raw HTML text: %#v", doc.Children)
+	}
+	if len(doc.Warnings) != 2 {
+		t.Fatalf("expected missing-file and non-HTML warnings, got %#v", doc.Warnings)
+	}
+	if !strings.Contains(doc.Warnings[0], `\importHTML file not found missing.html`) {
+		t.Fatalf("missing-file warning not found: %#v", doc.Warnings)
+	}
+	if !strings.Contains(doc.Warnings[1], `\importHTML content does not look like HTML: plain.txt`) {
+		t.Fatalf("non-HTML warning not found: %#v", doc.Warnings)
 	}
 }
 
@@ -712,6 +889,70 @@ Large body.
 	}
 }
 
+func TestBlockFontFamilyDeclaration(t *testing.T) {
+	tests := []struct {
+		name        string
+		decl        string
+		fontFamily  string
+		fontStyle   string
+		fontWeight  string
+		fontVariant string
+	}{
+		{name: "sans", decl: `\sffamily`, fontFamily: "sans"},
+		{name: "serif", decl: `\rmfamily`, fontFamily: "serif"},
+		{name: "oblique", decl: `\slshape`, fontStyle: "oblique"},
+		{name: "small caps", decl: `\scshape`, fontVariant: "small-caps"},
+		{name: "medium", decl: `\mdseries`, fontWeight: "400"},
+	}
+	for _, tt := range tests {
+		doc, err := Parse(`{
+`+tt.decl+`
+\section{Styled Title}
+Styled body.
+}`, nil, "main.tex", ".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sec := doc.Children[0].(*ast.Section)
+		title, ok := sec.Title[0].(*ast.Styled)
+		if !ok {
+			t.Fatalf("%s section title not styled: %#v", tt.name, sec.Title)
+		}
+		if title.FontFamily != tt.fontFamily || title.FontStyle != tt.fontStyle ||
+			title.FontWeight != tt.fontWeight || title.FontVariant != tt.fontVariant {
+			t.Fatalf("%s title style mismatch: %#v", tt.name, title)
+		}
+		body, ok := sec.Children[0].(*ast.StyledBlock)
+		if !ok {
+			t.Fatalf("%s section body not styled: %#v", tt.name, sec.Children)
+		}
+		if body.FontFamily != tt.fontFamily || body.FontStyle != tt.fontStyle ||
+			body.FontWeight != tt.fontWeight || body.FontVariant != tt.fontVariant {
+			t.Fatalf("%s body style mismatch: %#v", tt.name, body)
+		}
+	}
+}
+
+func TestBlockFontStyleDeclarationsCompose(t *testing.T) {
+	doc, err := Parse(`{
+\slshape\scshape
+\section{Styled Title}
+Styled body.
+}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := doc.Children[0].(*ast.Section)
+	title, ok := sec.Title[0].(*ast.Styled)
+	if !ok || title.FontStyle != "oblique" || title.FontVariant != "small-caps" {
+		t.Fatalf("section title style combination not preserved: %#v", sec.Title)
+	}
+	body, ok := sec.Children[0].(*ast.StyledBlock)
+	if !ok || body.FontStyle != "oblique" || body.FontVariant != "small-caps" {
+		t.Fatalf("section body style combination not preserved: %#v", sec.Children)
+	}
+}
+
 func TestTransparentBlockGroupCanContainSection(t *testing.T) {
 	doc, err := Parse(`Before.
 
@@ -840,7 +1081,7 @@ After.`, nil, "main.tex", ".")
 		t.Fatalf("expected paragraph, display math, paragraph; got %#v", doc.Children)
 	}
 	math, ok := doc.Children[1].(*ast.DisplayMath)
-	if !ok || math.TeX != "x + y" || !math.NoNumber {
+	if !ok || math.TeX != "x + y" || math.Numbered {
 		t.Fatalf("display math parsed incorrectly: %#v", doc.Children[1])
 	}
 }
@@ -866,12 +1107,51 @@ After.`, nil, "main.tex", ".")
 	if !ok {
 		t.Fatalf("dollar display math parsed as %T", doc.Children[1])
 	}
-	if !math.NoNumber {
+	if math.Numbered {
 		t.Fatalf("dollar display math should be unnumbered: %#v", math)
 	}
 	if !strings.Contains(math.TeX, `\forall{i,j\in X}`) ||
 		!strings.Contains(math.TeX, `\Rightarrow y \quad z`) {
 		t.Fatalf("display math TeX was not preserved: %q", math.TeX)
+	}
+}
+
+func TestDisplayMathDollarBlockPreservesEscapedDollar(t *testing.T) {
+	doc, err := Parse(`$$
+x + \$5 + y
+$$`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	math, ok := doc.Children[0].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("dollar display math parsed as %T", doc.Children[0])
+	}
+	if math.TeX != `x + \$5 + y` {
+		t.Fatalf("display math TeX did not preserve escaped dollar: %q", math.TeX)
+	}
+	if math.Numbered {
+		t.Fatalf("dollar display math should be unnumbered: %#v", math)
+	}
+}
+
+func TestInlineDollarWithDisplayMathDelimiterStaysText(t *testing.T) {
+	doc, err := Parse(`\textbf{$$x=y$$}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one paragraph, got %#v", doc.Children)
+	}
+	para, ok := doc.Children[0].(*ast.Paragraph)
+	if !ok {
+		t.Fatalf("block is %T, want *ast.Paragraph", doc.Children[0])
+	}
+	if blockInlineText(para.Inlines) != "$$x=y$$" {
+		t.Fatalf("display math delimiter in inline context changed: %#v", para.Inlines)
+	}
+	if containsEmptyInlineMath(para.Inlines) {
+		t.Fatalf("display math delimiter produced empty inline math: %#v", para.Inlines)
 	}
 }
 
@@ -916,7 +1196,7 @@ $$
 	if !ok {
 		t.Fatalf("dollar display math parsed as %T", doc.Children[1])
 	}
-	if !math.NoNumber {
+	if math.Numbered {
 		t.Fatalf("dollar display math should be unnumbered: %#v", math)
 	}
 }
@@ -943,8 +1223,22 @@ func TestAlignedEnvironmentIsPreservedAsDisplayMath(t *testing.T) {
 		!strings.Contains(math.TeX, `\Rightarrow x \quad y`) {
 		t.Fatalf("aligned TeX was not preserved: %q", math.TeX)
 	}
-	if !math.NoNumber {
+	if math.Numbered {
 		t.Fatalf("aligned fallback display math should be unnumbered: %#v", math)
+	}
+}
+
+func TestHTMLEnvironmentClosesAtFirstEndTag(t *testing.T) {
+	doc, err := Parse(`\begin{html}<p>hello</p>\end{html}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, ok := doc.Children[0].(*ast.RawHTML)
+	if !ok {
+		t.Fatalf("html environment parsed as %T", doc.Children[0])
+	}
+	if raw.HTML != `<p>hello</p>` {
+		t.Fatalf("raw HTML = %q, want %q", raw.HTML, `<p>hello</p>`)
 	}
 }
 
@@ -959,7 +1253,7 @@ x + y
 	if !ok {
 		t.Fatalf("equation* parsed as %T", doc.Children[0])
 	}
-	if !math.NoNumber {
+	if math.Numbered {
 		t.Fatalf("equation* should be unnumbered: %#v", math)
 	}
 }
@@ -975,7 +1269,7 @@ x + y
 	if !ok {
 		t.Fatalf("equation parsed as %T", doc.Children[0])
 	}
-	if !math.Numbered || math.NoNumber {
+	if !math.Numbered {
 		t.Fatalf("equation should be numbered: %#v", math)
 	}
 }
@@ -1204,6 +1498,38 @@ func inlineText(in ast.Inline) string {
 	default:
 		return ""
 	}
+}
+
+func containsEmptyInlineMath(inlines []ast.Inline) bool {
+	for _, in := range inlines {
+		switch n := in.(type) {
+		case *ast.InlineMath:
+			if n.TeX == "" {
+				return true
+			}
+		case *ast.Bold:
+			if containsEmptyInlineMath(n.Children) {
+				return true
+			}
+		case *ast.Italic:
+			if containsEmptyInlineMath(n.Children) {
+				return true
+			}
+		case *ast.Styled:
+			if containsEmptyInlineMath(n.Children) {
+				return true
+			}
+		case *ast.Link:
+			if containsEmptyInlineMath(n.Children) {
+				return true
+			}
+		case *ast.Footnote:
+			if containsEmptyInlineMath(n.Children) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestParseLstlistingLanguageFromOptionalArgs(t *testing.T) {

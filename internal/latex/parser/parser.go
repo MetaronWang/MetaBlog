@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"MetaBlog/internal/latex/ast"
 	latexblocks "MetaBlog/internal/latex/blocks"
 	"MetaBlog/internal/latex/lexer"
+	"MetaBlog/internal/pathutil"
 )
 
 type Parser struct {
@@ -252,15 +254,19 @@ func (p *Parser) readStyledBlockAt(s string, i int, appendix bool) (*ast.StyledB
 	}
 	style := decl.Style
 	return &ast.StyledBlock{
-		Color:      style.Color,
-		Background: style.Background,
-		Align:      decl.Align,
-		Underline:  style.Underline,
-		Bold:       style.Bold,
-		Italic:     style.Italic,
-		Mono:       style.Mono,
-		FontSize:   style.FontSize,
-		Children:   p.parseSectionedBlocksWithAppendix(decl.Rest, appendix),
+		Color:       style.Color,
+		Background:  style.Background,
+		Align:       decl.Align,
+		Underline:   style.Underline,
+		Bold:        style.Bold,
+		Italic:      style.Italic,
+		Mono:        style.Mono,
+		FontSize:    style.FontSize,
+		FontFamily:  style.FontFamily,
+		FontStyle:   style.FontStyle,
+		FontWeight:  style.FontWeight,
+		FontVariant: style.FontVariant,
+		Children:    p.parseSectionedBlocksWithAppendix(decl.Rest, appendix),
 	}, end, true
 }
 
@@ -325,14 +331,18 @@ func styleSectionedBlock(block ast.Block, style *ast.StyledBlock) ast.Block {
 	case *ast.Section:
 		if len(n.Title) > 0 {
 			n.Title = []ast.Inline{&ast.Styled{
-				Color:      style.Color,
-				Background: style.Background,
-				Underline:  style.Underline,
-				Bold:       style.Bold,
-				Italic:     style.Italic,
-				Mono:       style.Mono,
-				FontSize:   style.FontSize,
-				Children:   n.Title,
+				Color:       style.Color,
+				Background:  style.Background,
+				Underline:   style.Underline,
+				Bold:        style.Bold,
+				Italic:      style.Italic,
+				Mono:        style.Mono,
+				FontSize:    style.FontSize,
+				FontFamily:  style.FontFamily,
+				FontStyle:   style.FontStyle,
+				FontWeight:  style.FontWeight,
+				FontVariant: style.FontVariant,
+				Children:    n.Title,
 			}}
 		}
 		if style.Align != "" {
@@ -342,15 +352,19 @@ func styleSectionedBlock(block ast.Block, style *ast.StyledBlock) ast.Block {
 		return n
 	default:
 		return &ast.StyledBlock{
-			Color:      style.Color,
-			Background: style.Background,
-			Align:      style.Align,
-			Underline:  style.Underline,
-			Bold:       style.Bold,
-			Italic:     style.Italic,
-			Mono:       style.Mono,
-			FontSize:   style.FontSize,
-			Children:   []ast.Block{block},
+			Color:       style.Color,
+			Background:  style.Background,
+			Align:       style.Align,
+			Underline:   style.Underline,
+			Bold:        style.Bold,
+			Italic:      style.Italic,
+			Mono:        style.Mono,
+			FontSize:    style.FontSize,
+			FontFamily:  style.FontFamily,
+			FontStyle:   style.FontStyle,
+			FontWeight:  style.FontWeight,
+			FontVariant: style.FontVariant,
+			Children:    []ast.Block{block},
 		}
 	}
 }
@@ -471,6 +485,12 @@ func (bp *blockParser) readNextLooseBlocks() []ast.Block {
 		return []ast.Block{block}
 	}
 	if block, ok := bp.readDisplayMathBlock(); ok {
+		return []ast.Block{block}
+	}
+	if block, ok := bp.readImportHTMLBlock(); ok {
+		if block == nil {
+			return nil
+		}
 		return []ast.Block{block}
 	}
 	if block, ok := bp.readBibliographyBlock(); ok {
@@ -621,6 +641,9 @@ func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
 		case "verbatim", "lstlisting", "minted":
 			bp.pos = tok.End
 			return parseCodeBlock(bp.raw[tok.Start:tok.End], env), true
+		case "html":
+			bp.pos = tok.End
+			return &ast.RawHTML{HTML: stripEnvironmentShell(bp.raw[tok.Start:tok.End], env)}, true
 		default:
 			return nil, false
 		}
@@ -645,6 +668,8 @@ func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
 		return bp.parser.parseTCB(raw), true
 	case "verbatim", "lstlisting", "minted":
 		return parseCodeBlock(raw, env), true
+	case "html":
+		return &ast.RawHTML{HTML: stripEnvironmentShell(raw, env)}, true
 	case "figure", "figure*":
 		return bp.parser.parseFigure(raw, env == "figure*"), true
 	case "table", "table*":
@@ -655,12 +680,10 @@ func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
 			TeX:      strings.TrimSpace(removeLabelCommands(inner)),
 			Label:    firstCommandArg(inner, "label"),
 			Numbered: !strings.HasSuffix(env, "*"),
-			NoNumber: strings.HasSuffix(env, "*"),
 		}, true
 	case "aligned", "aligned*", "alignedat", "alignedat*", "gathered", "split", "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix":
 		return &ast.DisplayMath{
-			TeX:      strings.TrimSpace(raw),
-			NoNumber: true,
+			TeX: strings.TrimSpace(raw),
 		}, true
 	case "enumerate", "itemize", "description":
 		return bp.parser.parseList(stripEnvironmentShell(raw, env), env), true
@@ -690,7 +713,7 @@ func (bp *blockParser) readDisplayMathBlock() (ast.Block, bool) {
 			return nil, false
 		}
 		bp.pos = end + len("$$")
-		return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end]), NoNumber: true}, true
+		return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end])}, true
 	}
 	if !bp.commandAt("[") {
 		return nil, false
@@ -701,7 +724,96 @@ func (bp *blockParser) readDisplayMathBlock() (ast.Block, bool) {
 		return nil, false
 	}
 	bp.pos = end + len(`\]`)
-	return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end]), NoNumber: true}, true
+	return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end])}, true
+}
+
+func (bp *blockParser) readImportHTMLBlock() (ast.Block, bool) {
+	if !bp.commandAt("importHTML") {
+		return nil, false
+	}
+	arg, end, ok := readOneCommandArg(bp.raw, bp.pos, "importHTML")
+	if !ok {
+		bp.parser.warnings = append(bp.parser.warnings, "could not parse \\importHTML path")
+		bp.pos = bp.currentToken().End
+		return nil, true
+	}
+	bp.pos = end
+	rel := strings.TrimSpace(arg)
+	if rel == "" {
+		bp.parser.warnings = append(bp.parser.warnings, "\\importHTML path is empty")
+		return nil, true
+	}
+	cleanRel, err := pathutil.CleanRelativePath(rel)
+	if err != nil {
+		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML path not allowed %s: %v", rel, err))
+		return nil, true
+	}
+	baseDir := bp.parser.importHTMLBaseDir()
+	path := filepath.Join(baseDir, cleanRel)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML file not found %s: %v", rel, err))
+		return nil, true
+	}
+	html := string(data)
+	if !looksLikeHTML(html) {
+		bp.parser.warnings = append(bp.parser.warnings, fmt.Sprintf("\\importHTML content does not look like HTML: %s", rel))
+	}
+	return &ast.RawHTML{HTML: html}, true
+}
+
+func (p *Parser) importHTMLBaseDir() string {
+	if p.doc != nil && strings.TrimSpace(p.doc.InputFile) != "" {
+		return filepath.Dir(p.doc.InputFile)
+	}
+	if p.doc != nil && strings.TrimSpace(p.doc.SourceRoot) != "" {
+		return p.doc.SourceRoot
+	}
+	return "."
+}
+
+func looksLikeHTML(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "<!doctype html") || strings.HasPrefix(lower, "<html") {
+		return true
+	}
+	if strings.HasPrefix(lower, "<!--") && strings.Contains(lower, "-->") {
+		return true
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] != '<' {
+			continue
+		}
+		j := i + 1
+		if j < len(s) && s[j] == '/' {
+			j++
+		}
+		if j >= len(s) || !isHTMLNameStart(s[j]) {
+			continue
+		}
+		for j < len(s) && isHTMLNameChar(s[j]) {
+			j++
+		}
+		if j < len(s) && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r' || s[j] == '\f') {
+			return true
+		}
+		if j < len(s) && (s[j] == '>' || s[j] == '/') {
+			return true
+		}
+	}
+	return false
+}
+
+func isHTMLNameStart(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
+func isHTMLNameChar(c byte) bool {
+	return isHTMLNameStart(c) || (c >= '0' && c <= '9') || c == '-' || c == ':' || c == '_'
 }
 
 func (bp *blockParser) readBibliographyBlock() (ast.Block, bool) {

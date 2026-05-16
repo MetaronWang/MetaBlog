@@ -115,7 +115,7 @@ func TestUnnumberedDisplayMathDoesNotConsumeEquationNumber(t *testing.T) {
 	doc := &ast.Document{
 		Title: []ast.Inline{&ast.Text{Value: "Test"}},
 		Children: []ast.Block{
-			&ast.DisplayMath{TeX: "x + y", NoNumber: true},
+			&ast.DisplayMath{TeX: "x + y"},
 			&ast.DisplayMath{TeX: "a + b", Numbered: true},
 		},
 	}
@@ -337,6 +337,73 @@ func TestRenderFontSizeDeclarations(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rendered HTML missing font-size style %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderMonoStyleUsesSourceCodePro(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Styled{
+					Mono:     true,
+					Children: []ast.Inline{&ast.Text{Value: "fmt.Println"}},
+				},
+			}},
+		},
+	}
+
+	got := Render(doc)
+	want := `<span style="font-family: &#34;Source Code Pro&#34;, Consolas, &#34;Liberation Mono&#34;, &#34;Courier New&#34;, monospace;">fmt.Println</span>`
+	if !strings.Contains(got, want) {
+		t.Fatalf("rendered HTML missing mono font style %q in:\n%s", want, got)
+	}
+}
+
+func TestRenderRawHTMLBlockWithoutEscaping(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.RawHTML{HTML: `<div class="custom"><span data-x="1">raw & html</span></div>`},
+		},
+	}
+
+	got := Render(doc)
+	want := `<div class="custom"><span data-x="1">raw & html</span></div>`
+	if !strings.Contains(got, want) {
+		t.Fatalf("rendered HTML missing unescaped raw block %q in:\n%s", want, got)
+	}
+	if strings.Contains(got, `raw &amp; html`) {
+		t.Fatalf("raw HTML block was escaped:\n%s", got)
+	}
+}
+
+func TestRenderFontStyleCommands(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Styled{FontFamily: "sans", Children: []ast.Inline{&ast.Text{Value: "sans"}}},
+				&ast.Text{Value: " "},
+				&ast.Styled{FontVariant: "small-caps", Children: []ast.Inline{&ast.Text{Value: "caps"}}},
+				&ast.Text{Value: " "},
+				&ast.Styled{FontStyle: "oblique", Children: []ast.Inline{&ast.Text{Value: "slant"}}},
+				&ast.Text{Value: " "},
+				&ast.Styled{FontWeight: "400", Children: []ast.Inline{&ast.Text{Value: "medium"}}},
+			}},
+		},
+	}
+
+	got := Render(doc)
+	for _, want := range []string{
+		`font-family: &#34;HarmonyOS Sans&#34;, &#34;HarmonyOS Sans SC&#34;, &#34;Source Han Sans SC&#34;`,
+		`font-variant: small-caps;`,
+		`font-style: oblique;`,
+		`font-weight: 400;`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered HTML missing font style %q in:\n%s", want, got)
 		}
 	}
 }

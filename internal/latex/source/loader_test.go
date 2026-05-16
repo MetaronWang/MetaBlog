@@ -196,6 +196,9 @@ func TestLoadDoesNotExpandInputInsideRawEnvironments(t *testing.T) {
 fmt.Println("200% stays")
 \input{hidden}
 \end{minted}
+\begin{html}
+<div data-tex="\input{hidden}">300% stays</div>
+\end{html}
 \end{document}
 `), 0644); err != nil {
 		t.Fatal(err)
@@ -209,7 +212,7 @@ fmt.Println("200% stays")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"100% stays", "200% stays", `\input{hidden}`} {
+	for _, want := range []string{"100% stays", "200% stays", "300% stays", `\input{hidden}`} {
 		if !strings.Contains(loaded.Document, want) {
 			t.Fatalf("raw environment content was unexpectedly changed; missing %q in:\n%s", want, loaded.Document)
 		}

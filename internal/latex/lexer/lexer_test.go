@@ -1,6 +1,9 @@
 package lexer
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCommandNameUsesTeXLetterBoundary(t *testing.T) {
 	if IsCommandAt(`\citep{key}`, 0, "cite") {
@@ -64,6 +67,23 @@ After`
 	}
 	if tokens[0].Value[:len(`\begin{lstlisting}`)] != `\begin{lstlisting}` {
 		t.Fatalf("unexpected raw token: %#v", tokens[0])
+	}
+}
+
+func TestTokenizeProtectsHTMLEnvironment(t *testing.T) {
+	in := `\begin{html}
+<div data-tex="\section{Not A Section}">100% stays</div>
+\end{html}
+After`
+	tokens := Tokenize(in)
+	if len(tokens) < 3 {
+		t.Fatalf("too few tokens: %#v", tokens)
+	}
+	if tokens[0].Kind != Raw {
+		t.Fatalf("first token is %v, want Raw: %#v", tokens[0].Kind, tokens)
+	}
+	if !strings.Contains(tokens[0].Value, `\section{Not A Section}`) || !strings.Contains(tokens[0].Value, "100% stays") {
+		t.Fatalf("html environment content was not protected: %#v", tokens[0])
 	}
 }
 
