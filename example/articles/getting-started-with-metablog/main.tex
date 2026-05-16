@@ -30,18 +30,45 @@ MetaBlog, 网站构建, 文章元数据
 
 只有注册在 \texttt{data/articles.toml} 中的文章才会出现在生成的网站中。\texttt{articles/} 下存在某个文件夹，并不意味着它一定会被构建。
 
+\Section{初始化站点}
+
+通过golang运行源代码，或使用我们发布的二进制程序，可以在任意空目录初始化网站
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site init -root example -title "MetaBlog Example"
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site init -root example -title "MetaBlog Example"
+\end{lstlisting}
+
+\texttt{site init} 默认会下载字体文件，并在最后检测 Python、LaTeXML 和 PDF 转换器环境。它只检测并提示安装方式，不会自动安装或修改系统环境。
+
+如果只想先生成目录和配置，可以跳过字体下载和环境检测：
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site init -root example -title "MetaBlog Example" -skip-fonts -skip-env-check
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site init -root example -title "MetaBlog Example" -skip-fonts -skip-env-check
+\end{lstlisting}
+
 \section{构建和预览}
+
+\href{https://github.com/MetaronWang/MetaBlog}{Github仓库}中的 \texttt{example/}文件夹 是一个完整示例站点，
+站点名为 \texttt{MetaBlog Example}，包含关于页、自定义组件和多篇展示文章。可以直接从仓库根目录构建或预览：
 
 从仓库根目录构建这个示例：
 
 \begin{lstlisting}[language=PowerShell]
 go run ./cmd/metablog site build -root example -out example/out
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site build -root example -out example/out
 \end{lstlisting}
 
 输出目录是 \texttt{example/out}。如果需要实时预览，可以使用：
 
 \begin{lstlisting}[language=PowerShell]
 go run ./cmd/metablog site serve -root example -out example/out -watch
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site serve -root example -out example/out -watch
 \end{lstlisting}
 
 启用 \texttt{-watch} 后，已注册文章目录、关于页面、站点元数据、站点资源和自定义组件都会被监听。文档变化后，MetaBlog 会增量重建对应页面。

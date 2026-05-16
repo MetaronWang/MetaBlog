@@ -16,14 +16,18 @@
 
 从仓库根目录构建示例：
 
-\begin{lstlisting}[language=PowerShell]
+\begin{lstlisting}[language=Bash]
 go run ./cmd/metablog site build -root example -out example/out
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site build -root example -out example/out
 \end{lstlisting}
 
 启动实时预览：
 
 \begin{lstlisting}[language=PowerShell]
 go run ./cmd/metablog site serve -root example -out example/out -watch
+# 使用release的二进制包：
+./metablog_1.0.2_windows_amd64.exe site serve -root example -out example/out -watch
 \end{lstlisting}
 
 \end{document}
