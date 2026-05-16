@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Custom components">
+  <rect width="960" height="540" rx="24" fill="#f7fbfd"/>
+  <rect x="100" y="76" width="760" height="96" rx="16" fill="#256d85"/>
+  <rect x="100" y="222" width="760" height="96" rx="16" fill="#ffffff" stroke="#d8dee8" stroke-width="4"/>
+  <rect x="100" y="368" width="760" height="96" rx="16" fill="#2bb7b3"/>
+  <text x="480" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#ffffff">文章 HTML</text>
+  <text x="480" y="281" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#256d85">导入片段</text>
+  <text x="480" y="427" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#003e42">自定义组件</text>
+</svg>

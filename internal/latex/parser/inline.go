@@ -110,6 +110,11 @@ func (p *inlineParser) parseUntil(endToken string) []ast.Inline {
 				out = append(out, &ast.RawHTMLInline{HTML: html})
 				continue
 			}
+			if textValue, ok := p.readVerbInline(tok); ok {
+				flush()
+				out = append(out, &ast.Styled{Mono: true, Children: []ast.Inline{&ast.Text{Value: textValue}}})
+				continue
+			}
 		case lexer.LBrace:
 			flush()
 			if arg, end, ok := p.readGroupAt(tok.Start, lexer.LBrace, lexer.RBrace); ok {
@@ -364,6 +369,33 @@ func (p *inlineParser) readRawHTMLInline(tok lexer.Token) (string, bool) {
 	html := stripEnvironmentShell(tok.Value, env)
 	p.warnInlineRawHTMLBlockElements(html)
 	return html, true
+}
+
+func (p *inlineParser) readVerbInline(tok lexer.Token) (string, bool) {
+	if tok.Kind != lexer.Raw || tok.Start != p.i || !strings.HasPrefix(tok.Value, `\verb`) {
+		return "", false
+	}
+	i := len(`\verb`)
+	if i < len(tok.Value) && tok.Value[i] == '*' {
+		i++
+	}
+	if i >= len(tok.Value) {
+		return "", false
+	}
+	delim := tok.Value[i]
+	i++
+	if delim == '{' {
+		if len(tok.Value) > i && tok.Value[len(tok.Value)-1] == '}' {
+			p.i = tok.End
+			return tok.Value[i : len(tok.Value)-1], true
+		}
+		return "", false
+	}
+	if len(tok.Value) > i && tok.Value[len(tok.Value)-1] == delim {
+		p.i = tok.End
+		return tok.Value[i : len(tok.Value)-1], true
+	}
+	return "", false
 }
 
 func (p *inlineParser) warnInlineRawHTMLBlockElements(htmlText string) {

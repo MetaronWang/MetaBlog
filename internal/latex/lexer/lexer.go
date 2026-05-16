@@ -158,9 +158,8 @@ func rawEnvironmentEnd(s string, i int) (int, bool) {
 	if !ok || !isRawEnvironment(env) {
 		return i, false
 	}
-	endTag := `\end{` + env + `}`
-	if end := findRawEnvironmentClose(s, beginEnd, endTag); end >= 0 {
-		return end + len(endTag), true
+	if end, ok := findRawEnvironmentClose(s, beginEnd, env); ok {
+		return end, true
 	}
 	return len(s), true
 }
@@ -194,13 +193,53 @@ func isRawEnvironment(env string) bool {
 	}
 }
 
-func findRawEnvironmentClose(s string, start int, endTag string) int {
-	for i := start; i <= len(s)-len(endTag); i++ {
-		if s[i] == '\\' && !isEscapedAt(s, i) && startsWithAt(s, i, endTag) {
-			return i
+func findRawEnvironmentClose(s string, start int, env string) (int, bool) {
+	depth := 1
+	for i := start; i < len(s); i++ {
+		if s[i] != '\\' || isEscapedAt(s, i) {
+			continue
 		}
+		cmd, name, end, ok := environmentCommandAt(s, i)
+		if !ok {
+			if _, commandEnd, ok := CommandNameAt(s, i); ok {
+				i = commandEnd - 1
+			}
+			continue
+		}
+		if name == env {
+			switch cmd {
+			case "begin":
+				depth++
+			case "end":
+				depth--
+				if depth == 0 {
+					return end, true
+				}
+			}
+		}
+		i = end - 1
 	}
-	return -1
+	return 0, false
+}
+
+func environmentCommandAt(s string, i int) (string, string, int, bool) {
+	cmd, j, ok := CommandNameAt(s, i)
+	if !ok || (cmd != "begin" && cmd != "end") {
+		return "", "", i, false
+	}
+	for j < len(s) && isSpace(s[j]) {
+		j++
+	}
+	if j >= len(s) || s[j] != '{' {
+		return "", "", i, false
+	}
+	start := j + 1
+	for j = start; j < len(s) && s[j] != '}'; j++ {
+	}
+	if j >= len(s) {
+		return "", "", i, false
+	}
+	return cmd, s[start:j], j + 1, true
 }
 
 func verbCommandEnd(s string, i int) (int, bool) {
@@ -216,6 +255,18 @@ func verbCommandEnd(s string, i int) (int, bool) {
 	}
 	delim := s[j]
 	j++
+	if delim == '{' {
+		for j < len(s) {
+			if s[j] == '}' {
+				return j + 1, true
+			}
+			if s[j] == '\n' || s[j] == '\r' {
+				return i, false
+			}
+			j++
+		}
+		return len(s), true
+	}
 	for j < len(s) {
 		if s[j] == delim {
 			return j + 1, true

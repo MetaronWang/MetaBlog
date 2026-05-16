@@ -1,0 +1,25 @@
+\begin{document}
+
+\section{关于 MetaBlog Example}
+
+这是一个小型 MetaBlog 示例站点。它展示了如何使用 LaTeX 源文件、TOML 元数据和静态输出目录来组织一个个人博客。
+
+\begin{tcb}[#e8f3f8][#256d85][#f7fbfd]{这个示例包含什么}
+这个站点包含文章元数据、关于页面、自定义页面组件、SVG 文章主图、代码框、原始 HTML 片段，以及由 MetaBlog 解析器渲染的常见 LaTeX 写作功能。
+\end{tcb}
+
+\section{本地试用}
+
+从仓库根目录构建示例：
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site build -root example -out example/out
+\end{lstlisting}
+
+启动实时预览：
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site serve -root example -out example/out -watch
+\end{lstlisting}
+
+\end{document}

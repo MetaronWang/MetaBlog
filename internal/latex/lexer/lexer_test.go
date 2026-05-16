@@ -70,6 +70,31 @@ After`
 	}
 }
 
+func TestTokenizeProtectsNestedSameNameRawEnvironments(t *testing.T) {
+	in := `\begin{minted}{latex}
+\begin{minted}{go}
+fmt.Println("hi")
+\end{minted}
+after inner
+\end{minted}
+After`
+	tokens := Tokenize(in)
+	if len(tokens) < 3 {
+		t.Fatalf("too few tokens: %#v", tokens)
+	}
+	if tokens[0].Kind != Raw {
+		t.Fatalf("first token is %v, want Raw: %#v", tokens[0].Kind, tokens)
+	}
+	for _, want := range []string{`\begin{minted}{go}`, `fmt.Println("hi")`, `\end{minted}`, `after inner`} {
+		if !strings.Contains(tokens[0].Value, want) {
+			t.Fatalf("nested raw environment content missing %q: %#v", want, tokens[0])
+		}
+	}
+	if strings.Contains(tokens[0].Value, "After") {
+		t.Fatalf("raw token consumed text after the outer environment: %#v", tokens[0])
+	}
+}
+
 func TestTokenizeProtectsHTMLEnvironment(t *testing.T) {
 	in := `\begin{html}
 <div data-tex="\section{Not A Section}">100% stays</div>

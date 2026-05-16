@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Code blocks and highlighting">
+  <rect width="960" height="540" rx="24" fill="#1f2933"/>
+  <rect x="90" y="72" width="780" height="396" rx="18" fill="#272822"/>
+  <rect x="90" y="72" width="780" height="58" rx="18" fill="#2bb7b3"/>
+  <rect x="90" y="108" width="780" height="22" fill="#2bb7b3"/>
+  <text x="132" y="111" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#003e42">Go</text>
+  <circle cx="770" cy="101" r="10" fill="#003e42"/>
+  <circle cx="808" cy="101" r="10" fill="#003e42"/>
+  <circle cx="846" cy="101" r="10" fill="#003e42"/>
+  <text x="134" y="185" font-family="Consolas, monospace" font-size="28" fill="#66d9ef">func</text>
+  <text x="210" y="185" font-family="Consolas, monospace" font-size="28" fill="#a6e22e">main</text>
+  <text x="286" y="185" font-family="Consolas, monospace" font-size="28" fill="#f8f8f2">() {</text>
+  <text x="170" y="242" font-family="Consolas, monospace" font-size="28" fill="#f8f8f2">fmt.Println(</text>
+  <text x="364" y="242" font-family="Consolas, monospace" font-size="28" fill="#e6db74">"你好 MetaBlog"</text>
+  <text x="636" y="242" font-family="Consolas, monospace" font-size="28" fill="#f8f8f2">)</text>
+  <text x="134" y="299" font-family="Consolas, monospace" font-size="28" fill="#f8f8f2">}</text>
+</svg>

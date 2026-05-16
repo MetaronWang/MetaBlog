@@ -1,0 +1,5 @@
+out/
+.metablog-cache/
+.gocache/
+.gomodcache/
+web/static/fonts

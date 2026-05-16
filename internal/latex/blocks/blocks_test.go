@@ -1,6 +1,9 @@
 package blocks
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLiftExtractsComplexMetadataWithTokenBoundaries(t *testing.T) {
 	res := Lift(`Before.
@@ -27,5 +30,33 @@ After.`)
 	}
 	if block.Label != "alg:real" {
 		t.Fatalf("label parsed incorrectly: %q", block.Label)
+	}
+}
+
+func TestLiftDoesNotExtractComplexBlocksInsideRawTextEnvironments(t *testing.T) {
+	res := Lift(`Before.
+
+\begin{minted}{latex}
+\begin{algorithm}
+\caption{This is code, not a real algorithm block}
+\end{algorithm}
+\end{minted}
+
+\begin{lstlisting}
+\begin{tabular}{c}
+x
+\end{tabular}
+\end{lstlisting}
+
+\begin{html}
+<pre>\begin{algorithm}\end{algorithm}</pre>
+\end{html}
+
+After.`)
+	if len(res.Blocks) != 0 {
+		t.Fatalf("expected no complex blocks inside raw environments, got %#v", res.Blocks)
+	}
+	if !strings.Contains(res.Text, `\begin{algorithm}`) || strings.Contains(res.Text, "@@METABLOG_COMPLEX_BLOCK_") {
+		t.Fatalf("raw environment content was not preserved:\n%s", res.Text)
 	}
 }

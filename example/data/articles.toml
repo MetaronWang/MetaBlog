@@ -1,0 +1,47 @@
+[[articles]]
+title = "从零开始使用 MetaBlog"
+description = "这篇文章介绍一个 MetaBlog 站点的目录结构、配置文件、文章元数据，以及常用构建和预览命令。"
+author = "MetaBlog 示例"
+date = "2026-05-16"
+category = ["指南", "快速开始"]
+tags = ["MetaBlog", "CLI", "网站构建"]
+folder = "articles/getting-started-with-metablog"
+main_fig = "figs/site-overview.svg"
+main_file = "main.tex"
+slug = "getting-started-with-metablog"
+
+[[articles]]
+title = "使用 LaTeX 编写文章"
+description = "这篇文章展示 MetaBlog 的 LaTeX 写作能力，包括章节、列表、表格、伪代码、公式、链接、tcb 文本框、显式换行和行内样式。"
+author = "MetaBlog 示例"
+date = "2026-05-15"
+category = ["指南", "LaTeX 写作"]
+tags = ["LaTeX", "写作", "KaTeX", "TCB"]
+folder = "articles/writing-articles-with-latex"
+main_fig = "figs/latex-writing.svg"
+main_file = "main.tex"
+slug = "writing-articles-with-latex"
+
+[[articles]]
+title = "代码框与语法高亮"
+description = "这篇文章展示 lstlisting 和 minted 代码框，包括语言识别、行号、复制按钮、折叠按钮和长行自动换行。"
+author = "MetaBlog 示例"
+date = "2026-05-14"
+category = ["指南", "代码展示"]
+tags = ["代码", "语法高亮", "lstlisting", "minted"]
+folder = "articles/code-blocks-and-highlighting"
+main_fig = "figs/code-blocks.svg"
+main_file = "main.tex"
+slug = "code-blocks-and-highlighting"
+
+[[articles]]
+title = "原始 HTML 与自定义组件"
+description = "这篇文章展示可信原始 HTML 块、外部 HTML 片段导入、全站页尾组件和文章统计组件。"
+author = "MetaBlog 示例"
+date = "2026-05-13"
+category = ["指南", "自定义"]
+tags = ["HTML", "组件", "卜算子"]
+folder = "articles/raw-html-and-custom-components"
+main_fig = "figs/custom-components.svg"
+main_file = "main.tex"
+slug = "raw-html-and-custom-components"

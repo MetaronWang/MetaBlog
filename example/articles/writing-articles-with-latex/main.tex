@@ -1,0 +1,175 @@
+\begin{document}
+
+\title{使用 LaTeX 编写文章}
+\author{MetaBlog 示例}{}{example@example.com}
+
+\begin{abstract}
+MetaBlog 支持一个面向网页文章写作的 LaTeX 子集。这篇文章展示 Go 渲染器可以直接解析的常见结构，以及交给 LaTeXML 处理的表格和伪代码块。
+\end{abstract}
+
+\section{章节和文本样式}
+
+可以使用 \verb|\section|、\verb|\subsection|、\verb|\subsubsection| 和 \verb|\subsubsubsection| 组织文章结构。
+
+\subsection{行内样式}
+
+行内文本可以使用 \textbf{粗体}、\textit{斜体}、\emph{强调}、\texttt{等宽字体}、\textsf{无衬线字体}、\textrm{衬线字体}、\textsc{小型大写}、\underline{下划线} 和 \textcolor{#256d85}{彩色文本}。
+
+声明式样式也可以用在文本型参数中。例如，下面这个 tcb 标题使用了居中和较大字号：
+
+\begin{tcb}[#e8f3f8][#256d85][#f7fbfd]{\Large\centering 带样式的 TCB 标题}
+\texttt{tcb} 环境会渲染为可折叠文本框，包含标题栏、正文区域和左侧强调竖线。
+\end{tcb}
+
+\subsection{显式换行}
+
+使用 \verb|\\| 可以显式换行，但不会创建新的段落。\\
+这一行会出现在生成 HTML 的 \texttt{<br>} 后面。
+
+\section{列表}
+
+支持多层嵌套列表：
+
+\begin{itemize}
+  \item 站点内容
+  \begin{itemize}
+    \item 关于页面
+    \item 文章页面
+    \item 索引页面
+  \end{itemize}
+  \item 站点元数据
+  \begin{enumerate}
+    \item \texttt{config.toml}
+    \item \texttt{articles.toml}
+  \end{enumerate}
+\end{itemize}
+
+描述列表可以使用标签：
+
+\begin{description}
+  \item[Build] 生成静态 HTML 到输出目录。
+  \item[Serve] 启动本地 HTTP 服务器用于预览。
+  \item[Watch] 服务器运行时自动重建发生变化的文档。
+\end{description}
+
+\section{表格}
+
+\texttt{table} 环境的外壳由 MetaBlog 解析，因此 caption、label 和交叉引用由站点生成器统一管理。真正复杂的 \texttt{tabular} 或 \texttt{tabularx} 主体会交给 LaTeXML 转换。
+
+\begin{table}
+\caption{\centering 示例站点常见文件}
+\label{tab:example-files}
+\begin{tabular}{lll}
+\hline
+文件 & 作用 & 是否必须 \\
+\hline
+\texttt{data/config.toml} & 站点标题、logo、icon 和分页配置 & 是 \\
+\texttt{data/articles.toml} & 注册需要构建的文章 & 是 \\
+\texttt{data/about_page/main.tex} & 关于页面源文件 & 否 \\
+\texttt{data/custom_components/page_footing.tex} & 全站页尾组件 & 否 \\
+\hline
+\end{tabular}
+\end{table}
+
+表 \ref{tab:example-files} 展示了一个示例站点中最常见的配置文件。其代码如下：
+\begin{minted}{LaTeX}
+\begin{table}
+\caption{\centering 示例站点常见文件}
+\label{tab:example-files}
+\begin{tabular}{lll}
+\hline
+文件 & 作用 & 是否必须 \\
+\hline
+\texttt{data/config.toml} & 站点标题、logo、icon 和分页配置 & 是 \\
+\texttt{data/articles.toml} & 注册需要构建的文章 & 是 \\
+\texttt{data/about_page/main.tex} & 关于页面源文件 & 否 \\
+\texttt{data/custom_components/page_footing.tex} & 全站页尾组件 & 否 \\
+\hline
+\end{tabular}
+\end{table}
+\end{minted}
+
+
+\section{伪代码}
+
+\texttt{algorithm} 和 \texttt{algorithm*} 属于复杂块，会整体交给 LaTeXML 处理。适合在文章中放置论文风格的\texttt{algorithm2e}伪代码描述。
+
+\begin{algorithm}[tbp]
+    \small
+    \caption{algorithm2e Example}
+    \label{alg:alg_example}
+    \SetKwInput{KwData}{Input}
+    \SetKwInput{KwResult}{Output}
+    \KwData{The Raw LaTeX algorithm block}
+    \KwResult{Rendered pseudo code block}
+    \SetKw{To}{to}
+    \SetKw{Append}{append}
+    \SetKw{Into}{into}
+    \SetKw{Break}{break}
+    \SetKw{Return}{return}
+    \SetKwComment{EmptyLine}{ }{ }
+    \SetNoFillComment
+    \For{all block \(\in\) articles}{
+    \If{block is algorithm(*) or /tabular(x)}{
+        Render the block by \texttt{LaTeXML}\;
+    }{
+        Render the block by inside complier\;
+    }
+    }
+    \Return All Blocks
+\end{algorithm}
+
+上面Algorithm~\ref{alg:alg_example}的伪代码描述了 MetaBlog 的文档级增量构建判断。
+
+其代码如下：
+\begin{minted}{LaTeX}
+\begin{algorithm}[tbp]
+    \small
+    \caption{algorithm2e Example}
+    \label{alg:alg_example}
+    \SetKwInput{KwData}{Input}
+    \SetKwInput{KwResult}{Output}
+    \KwData{The Raw LaTeX algorithm block}
+    \KwResult{Rendered pseudo code block}
+    \SetKw{To}{to}
+    \SetKw{Append}{append}
+    \SetKw{Into}{into}
+    \SetKw{Break}{break}
+    \SetKw{Return}{return}
+    \SetKwComment{EmptyLine}{ }{ }
+    \SetNoFillComment
+    \For{all block \(\in\) articles}{
+    \If{block is algorithm(*) or /tabular(x)}{
+        Render the block by \texttt{LaTeXML}\;
+    }{
+        Render the block by inside complier\;
+    }
+    }
+    \Return All Blocks
+\end{algorithm}
+\end{minted}
+
+\section{公式}
+
+行内公式会交给 KaTeX 渲染，例如 $f(x)=x^2+\alpha$。
+
+块级公式也会保留给 KaTeX：
+
+\[
+\forall x \in X,\quad f(x) \ge 0
+\]
+
+带编号的公式可以设置 label：
+
+\begin{equation}
+\label{eq:example-loss}
+L(\theta)=\sum_{i=1}^{n}(y_i-\hat{y}_i)^2
+\end{equation}
+
+公式 \ref{eq:example-loss} 可以在普通文本中引用。
+
+\section{链接}
+
+可以使用 \verb|\url{https://example.com}| 显示完整 URL，也可以使用 \verb|\href{https://github.com}{GitHub}| 指定自定义链接文字。
+
+\end{document}

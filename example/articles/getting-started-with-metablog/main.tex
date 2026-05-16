@@ -1,0 +1,68 @@
+\begin{document}
+
+\title{从零开始使用 MetaBlog}
+\author{MetaBlog 示例}{}{example@example.com}
+
+\begin{abstract}
+这篇文章介绍一个 MetaBlog 站点所需的最小文件结构，以及构建和预览站点时最常用的命令。
+\end{abstract}
+
+\begin{keywords}
+MetaBlog, 网站构建, 文章元数据
+\end{keywords}
+
+\section{目录结构}
+
+一个 MetaBlog 站点就是一个普通文件夹。最重要的文件包括：
+
+\begin{description}
+  \item[\texttt{data/config.toml}] 网站标题、logo、icon 和分页配置。
+  \item[\texttt{data/articles.toml}] 需要参与构建的文章列表。
+  \item[\texttt{data/about_page/main.tex}] 关于页面的 LaTeX 源文档。
+  \item[\texttt{articles/}] 文章源文件目录。
+  \item[\texttt{asset/}] 站点级资源，例如 logo 和 favicon。
+\end{description}
+
+只有注册在 \texttt{data/articles.toml} 中的文章才会出现在生成的网站中。\texttt{articles/} 下存在某个文件夹，并不意味着它一定会被构建。
+
+\section{构建和预览}
+
+从仓库根目录构建这个示例：
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site build -root example -out example/out
+\end{lstlisting}
+
+输出目录是 \texttt{example/out}。如果需要实时预览，可以使用：
+
+\begin{lstlisting}[language=PowerShell]
+go run ./cmd/metablog site serve -root example -out example/out -watch
+\end{lstlisting}
+
+启用 \texttt{-watch} 后，已注册文章目录、关于页面、站点元数据、站点资源和自定义组件都会被监听。文档变化后，MetaBlog 会增量重建对应页面。
+
+\section{文章元数据}
+
+每篇文章都通过 TOML 配置：
+
+\begin{lstlisting}[language=TOML]
+[[articles]]
+title = "从零开始使用 MetaBlog"
+description = "这篇文章介绍一个 MetaBlog 站点的基本结构。"
+author = "MetaBlog 示例"
+date = "2026-05-16"
+category = ["指南", "快速开始"]
+tags = ["MetaBlog", "CLI", "网站构建"]
+folder = "articles/getting-started-with-metablog"
+main_fig = "figs/site-overview.svg"
+main_file = "main.tex"
+slug = "getting-started-with-metablog"
+\end{lstlisting}
+
+\texttt{description} 会显示在首页和文章列表页中。\texttt{category} 是多级分类，\texttt{tags} 中的每个标签都会生成对应的标签列表页。
+
+\section{分页}
+
+这个示例把 \texttt{home_page_size} 设置为 3，并提供 4 篇文章，因此首页可以直接展示分页效果。
+
+\end{document}

@@ -1,0 +1,47 @@
+\begin{document}
+
+\title{原始 HTML 与自定义组件}
+\author{MetaBlog 示例}{}{example@example.com}
+
+\begin{abstract}
+这篇文章展示可信原始 HTML 块、外部 HTML 片段导入、行内原始 HTML，以及站点级自定义组件。
+\end{abstract}
+
+\section{原始 HTML 块}
+
+当可信 HTML 片段需要直接进入页面时，可以使用 \texttt{html} 环境。
+
+\begin{html}
+<div style="border-left: 6px solid #2bb7b3; padding: 12px 16px; background: #f7fbfd;">
+  <strong>原始 HTML 块：</strong>这段标记会不经过 escape 直接输出。
+</div>
+\end{html}
+
+\section{导入 HTML 文件}
+
+使用 \verb|\importHTML{...}| 可以加载相对于主 TeX 文件的可信 HTML 文件。
+
+\importHTML{partials/profile-card.html}
+
+兼容别名 \verb|\inputHTML{...}| 遵循同样规则。它和 \verb|\input{...}| 不同，专门用于导入原始 HTML 片段。
+
+\section{行内原始 HTML}
+
+如果前后没有空白行，原始 HTML 可以作为段落内部内容出现：
+\begin{html}<span style="color:#256d85;font-weight:700;">这是一段行内 HTML 文本</span>\end{html}
+并继续留在同一个段落中。
+
+如果使用 \texttt{<div>} 这类块级 HTML，应当用空白行把它和上下文分开，避免浏览器自动闭合段落。
+
+\section{自定义组件}
+
+这个示例站点包含两个自定义组件：
+
+\begin{itemize}
+  \item \texttt{data/custom_components/page_footing.tex}，插入到每个页面底部。
+  \item \texttt{data/custom_components/article_stat.tex}，插入到每篇文章的元信息下方。
+\end{itemize}
+
+组件文件只需要写内部内容。MetaBlog 会自动为它们包裹正确的外层元素。
+
+\end{document}

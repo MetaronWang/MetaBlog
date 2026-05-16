@@ -664,6 +664,7 @@ Inline parser 负责把文本片段解析为 inline AST。
 | 链接 | `\url{...}`、`\href{url}{text}`。 |
 | 引用 | `\ref{...}`、`\cite{...}`。 |
 | 公式 | `$...$`、`\(...\)`。 |
+| 原样 inline | `\verb|...|`、兼容写法 `\verb{...}`，渲染为等宽原样文本。 |
 | 显式换行 | `\\`，渲染为 `<br>`。 |
 | 行内原始 HTML | 段落内的 `html`、`\importHTML{...}`、`\inputHTML{...}`，渲染为 `ast.RawHTMLInline`。 |
 

@@ -273,6 +273,47 @@ func TestTextTTCommandUsesMonoStyle(t *testing.T) {
 	}
 }
 
+func TestVerbCommandUsesMonoRawText(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{name: "delimiter", src: `Use \verb|\section{A}| here.`, want: `\section{A}`},
+		{name: "brace", src: `Use \verb{\section} here.`, want: `\section`},
+	}
+	for _, tt := range tests {
+		inlines := ParseInline(tt.src)
+		if len(inlines) != 3 {
+			t.Fatalf("%s: unexpected inline nodes: %#v", tt.name, inlines)
+		}
+		mono, ok := inlines[1].(*ast.Styled)
+		if !ok || !mono.Mono {
+			t.Fatalf("%s: verb command did not produce mono style: %#v", tt.name, inlines[1])
+		}
+		if blockInlineText(mono.Children) != tt.want {
+			t.Fatalf("%s: verb content changed: %#v", tt.name, mono.Children)
+		}
+	}
+}
+
+func TestVerbCommandDoesNotSplitParagraph(t *testing.T) {
+	doc, err := Parse(`可以使用 \verb|\section|、\verb|\subsection| 和 \verb|\subsubsection| 组织文章结构。`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one paragraph, got %#v", doc.Children)
+	}
+	para, ok := doc.Children[0].(*ast.Paragraph)
+	if !ok {
+		t.Fatalf("child is %T, want *ast.Paragraph", doc.Children[0])
+	}
+	if got := blockInlineText(para.Inlines); got != `可以使用 \section、\subsection 和 \subsubsection 组织文章结构。` {
+		t.Fatalf("paragraph text changed: %q", got)
+	}
+}
+
 func TestFontStyleCommandsUseStyledInline(t *testing.T) {
 	tests := []struct {
 		src         string
@@ -716,6 +757,35 @@ fmt.Println("hi")
 	}
 	if code.EnvName != "minted" || code.Language != "go" || code.Text != `fmt.Println("hi")` {
 		t.Fatalf("unexpected minted block: %#v", code)
+	}
+}
+
+func TestMintedCanContainMintedEnvironmentSource(t *testing.T) {
+	doc, err := Parse(`\begin{minted}{latex}
+\begin{minted}{go}
+fmt.Println("hi")
+\end{minted}
+\end{minted}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one code block, got %#v", doc.Children)
+	}
+	code, ok := doc.Children[0].(*ast.CodeBlock)
+	if !ok {
+		t.Fatalf("block is %T, want *ast.CodeBlock", doc.Children[0])
+	}
+	if code.EnvName != "minted" || code.Language != "latex" {
+		t.Fatalf("unexpected minted metadata: %#v", code)
+	}
+	for _, want := range []string{`\begin{minted}{go}`, `fmt.Println("hi")`, `\end{minted}`} {
+		if !strings.Contains(code.Text, want) {
+			t.Fatalf("nested minted source missing %q: %#v", want, code)
+		}
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", doc.Warnings)
 	}
 }
 

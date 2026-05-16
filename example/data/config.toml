@@ -1,0 +1,5 @@
+title = "MetaBlog Example"
+logo = "figs/metablog-example.svg"
+icon = "figs/metablog-example.svg"
+home_page_size = 3
+article_list_page_size = 10

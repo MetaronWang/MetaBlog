@@ -340,7 +340,20 @@ print("hello")
 
 ### 8.5 `\verb`
 
-`\verb` 内容作为原样 inline 片段保护，不会参与注释和 input/include 解析。
+`\verb` 内容作为原样 inline 片段保护，不会参与注释和 input/include 解析，也不会继续解析其中的 LaTeX 命令。渲染时会作为等宽 inline 文本输出。
+
+标准 LaTeX 写法使用任意非空白字符作为分隔符，例如：
+
+```latex
+\verb|\section{Title}|
+\verb+\input{file}+
+```
+
+MetaBlog 也兼容 `\verb{...}` 写法，便于在不包含右花括号的短文本中使用：
+
+```latex
+\verb{\section}
+```
 
 ### 8.6 `html`
 

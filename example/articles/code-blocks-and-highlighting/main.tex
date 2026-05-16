@@ -1,0 +1,57 @@
+\begin{document}
+
+\title{代码框与语法高亮}
+\author{MetaBlog 示例}{}{example@example.com}
+
+\begin{abstract}
+MetaBlog 会把 \texttt{lstlisting} 和 \texttt{minted} 环境渲染为带行号、交互按钮和 Chroma 语法高亮的代码框。
+\end{abstract}
+
+\section{lstlisting}
+
+\texttt{lstlisting} 环境会从 \texttt{language} 可选参数读取代码语言。其他可选参数目前会被忽略。
+
+\begin{lstlisting}[language=Go]
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("你好，MetaBlog")
+}
+\end{lstlisting}
+
+\section{minted}
+
+\texttt{minted} 环境会从必选参数读取代码语言。可选参数会被忽略。
+
+\begin{minted}[]{python}
+from dataclasses import dataclass
+
+@dataclass
+class Article:
+    title: str
+    slug: str
+
+def render(article: Article) -> str:
+    return f"<h1>{article.title}</h1>"
+\end{minted}
+
+\section{长行}
+
+代码框标题栏中的 wrap 按钮可以切换视觉自动换行。行号仍然对应原始源码行。
+
+\begin{lstlisting}[language=JavaScript]
+const message = "这是一行刻意写得很长的代码，用来展示 MetaBlog 文章页面中代码框的自动换行切换效果。";
+console.log(message);
+\end{lstlisting}
+
+\section{普通 verbatim}
+
+如果只需要保留原始文本而不做语法高亮，可以使用 \texttt{verbatim}：
+
+\begin{verbatim}
+verbatim 会把 \section、%、{braces} 这类内容保留为原始文本。
+\end{verbatim}
+
+\end{document}

@@ -996,6 +996,9 @@ func (bp *blockParser) nextParagraphBoundary() int {
 func (bp *blockParser) isBlockBoundaryToken(tok lexer.Token, paragraphStart int) bool {
 	switch tok.Kind {
 	case lexer.Raw:
+		if isVerbRawToken(tok.Value) {
+			return false
+		}
 		env, _, ok := readBeginAt(bp.raw, tok.Start)
 		return !ok || env != "html"
 	case lexer.LBrace:
@@ -1012,6 +1015,10 @@ func (bp *blockParser) isBlockBoundaryToken(tok lexer.Token, paragraphStart int)
 	default:
 		return false
 	}
+}
+
+func isVerbRawToken(value string) bool {
+	return strings.HasPrefix(value, `\verb`)
 }
 
 func (p *Parser) parseLooseBlocks(s string) []ast.Block {

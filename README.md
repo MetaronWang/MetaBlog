@@ -51,6 +51,13 @@ metablog site build -root . -out out
 metablog site init -root my-blog -title "My Blog" -skip-fonts -skip-env-check
 ```
 
+仓库中的 `example/` 是一个完整示例站点，站点名为 `MetaBlog Example`，包含关于页、自定义组件和多篇展示文章。可以直接从仓库根目录构建或预览：
+
+```bash
+go run ./cmd/metablog site build -root example -out example/out
+go run ./cmd/metablog site serve -root example -out example/out -watch
+```
+
 ## 外部依赖
 
 基础构建只需要 `metablog` 二进制。根据文档内容和构建选项，可能需要以下外部工具：

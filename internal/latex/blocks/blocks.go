@@ -32,6 +32,17 @@ func Lift(s string) Result {
 			out.WriteString(s[i:])
 			break
 		}
+		if isRawProtectedStart(env) {
+			rawEnd, ok := findEnvironmentEnd(s, start, env)
+			if !ok {
+				out.WriteString(s[i:end])
+				i = end
+				continue
+			}
+			out.WriteString(s[i:rawEnd])
+			i = rawEnd
+			continue
+		}
 		if !isComplexStart(env) {
 			out.WriteString(s[i:end])
 			i = end
@@ -121,6 +132,15 @@ func complexMetadata(raw string) (string, string) {
 		}
 	}
 	return caption, label
+}
+
+func isRawProtectedStart(env string) bool {
+	switch env {
+	case "verbatim", "lstlisting", "minted", "html":
+		return true
+	default:
+		return false
+	}
 }
 
 func isComplexStart(env string) bool {

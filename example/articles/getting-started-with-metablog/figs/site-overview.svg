@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #f7fbfd;
+      }
+
+      .cls-2 {
+        fill: #1f2933;
+      }
+
+      .cls-3 {
+        fill: none;
+        stroke-width: 6.92px;
+      }
+
+      .cls-3, .cls-4 {
+        stroke: #8795a6;
+        stroke-linecap: round;
+      }
+
+      .cls-5, .cls-6, .cls-7 {
+        isolation: isolate;
+      }
+
+      .cls-5, .cls-8, .cls-7 {
+        fill: #fff;
+      }
+
+      .cls-5, .cls-7 {
+        font-size: 30px;
+      }
+
+      .cls-9 {
+        letter-spacing: -.07em;
+      }
+
+      .cls-10 {
+        fill: #2bb7b3;
+      }
+
+      .cls-11 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-6 {
+        font-family: "Arial, sans-serif";
+        font-size: 34px;
+        font-weight: 300;
+      }
+
+      .cls-6, .cls-12 {
+        fill: #256d85;
+      }
+
+      .cls-4 {
+        stroke-width: 8px;
+      }
+
+      .cls-8 {
+        stroke: #d8dee8;
+        stroke-width: 4px;
+      }
+
+      .cls-7 {
+        font-family: Arial-BoldMT, Arial;
+        font-weight: 700;
+      }
+    </style>
+  </defs>
+  <rect class="cls-1" width="960" height="540" rx="24" ry="24"/>
+  <rect class="cls-12" x="70" y="70" width="220" height="120" rx="12" ry="12"/>
+  <rect class="cls-10" x="370" y="70" width="220" height="120" rx="12" ry="12"/>
+  <rect class="cls-2" x="670" y="70" width="220" height="120" rx="12" ry="12"/>
+  <rect class="cls-8" x="180" y="330" width="600" height="120" rx="12" ry="12"/>
+  <path class="cls-4" d="M290,130h80M590,130h80M480,190v130"/>
+  <path class="cls-3" d="M290,130c70,0,20,194.39,190,194.39M670,130c-70,0-20,194.39-190,194.39"/>
+  <text class="cls-7" transform="translate(136.1 138)"><tspan x="0" y="0">La</tspan><tspan class="cls-9" x="35.01" y="0">T</tspan><tspan x="51.11" y="0">eX</tspan></text>
+  <text class="cls-7" transform="translate(437.78 138)"><tspan class="cls-11" x="0" y="0">T</tspan><tspan x="17.78" y="0">OM</tspan><tspan class="cls-11" x="66.11" y="0">L</tspan></text>
+  <text class="cls-5" font-family="Arial, sans-serif" transform="translate(757.5 138)"><tspan x="0" y="0">资源</tspan></text>
+  <text class="cls-6" font-family="Arial, sans-serif" transform="translate(403.5 405)"><tspan x="0" y="0">静态博客输出</tspan></text>
+</svg>

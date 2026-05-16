@@ -1,0 +1,64 @@
+/* Background */ .chbg { color: #f8f8f2; background-color: #272822;-moz-tab-size: 4; -o-tab-size: 4; tab-size: 4; }
+/* PreWrapper */ .chchroma { color: #f8f8f2; background-color: #272822;-moz-tab-size: 4; -o-tab-size: 4; tab-size: 4; -webkit-text-size-adjust: none; }
+/* Error */ .chchroma .cherr { color: #960050; background-color: #1e0010 }
+/* LineLink */ .chchroma .chlnlinks { outline: none; text-decoration: none; color: inherit }
+/* LineTableTD */ .chchroma .chlntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
+/* LineTable */ .chchroma .chlntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
+/* LineHighlight */ .chchroma .chhl { background-color: #3c3d38 }
+/* LineNumbersTable */ .chchroma .chlnt { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* LineNumbers */ .chchroma .chln { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* Line */ .chchroma .chline { display: flex; }
+/* Keyword */ .chchroma .chk { color: #66d9ef }
+/* KeywordConstant */ .chchroma .chkc { color: #66d9ef }
+/* KeywordDeclaration */ .chchroma .chkd { color: #66d9ef }
+/* KeywordNamespace */ .chchroma .chkn { color: #f92672 }
+/* KeywordPseudo */ .chchroma .chkp { color: #66d9ef }
+/* KeywordReserved */ .chchroma .chkr { color: #66d9ef }
+/* KeywordType */ .chchroma .chkt { color: #66d9ef }
+/* NameAttribute */ .chchroma .chna { color: #a6e22e }
+/* NameClass */ .chchroma .chnc { color: #a6e22e }
+/* NameConstant */ .chchroma .chno { color: #66d9ef }
+/* NameDecorator */ .chchroma .chnd { color: #a6e22e }
+/* NameException */ .chchroma .chne { color: #a6e22e }
+/* NameOther */ .chchroma .chnx { color: #a6e22e }
+/* NameTag */ .chchroma .chnt { color: #f92672 }
+/* NameFunction */ .chchroma .chnf { color: #a6e22e }
+/* NameFunctionMagic */ .chchroma .chfm { color: #a6e22e }
+/* Literal */ .chchroma .chl { color: #ae81ff }
+/* LiteralDate */ .chchroma .chld { color: #e6db74 }
+/* LiteralString */ .chchroma .chs { color: #e6db74 }
+/* LiteralStringAffix */ .chchroma .chsa { color: #e6db74 }
+/* LiteralStringBacktick */ .chchroma .chsb { color: #e6db74 }
+/* LiteralStringChar */ .chchroma .chsc { color: #e6db74 }
+/* LiteralStringDelimiter */ .chchroma .chdl { color: #e6db74 }
+/* LiteralStringDoc */ .chchroma .chsd { color: #e6db74 }
+/* LiteralStringDouble */ .chchroma .chs2 { color: #e6db74 }
+/* LiteralStringEscape */ .chchroma .chse { color: #ae81ff }
+/* LiteralStringHeredoc */ .chchroma .chsh { color: #e6db74 }
+/* LiteralStringInterpol */ .chchroma .chsi { color: #e6db74 }
+/* LiteralStringOther */ .chchroma .chsx { color: #e6db74 }
+/* LiteralStringRegex */ .chchroma .chsr { color: #e6db74 }
+/* LiteralStringSingle */ .chchroma .chs1 { color: #e6db74 }
+/* LiteralStringSymbol */ .chchroma .chss { color: #e6db74 }
+/* LiteralNumber */ .chchroma .chm { color: #ae81ff }
+/* LiteralNumberBin */ .chchroma .chmb { color: #ae81ff }
+/* LiteralNumberFloat */ .chchroma .chmf { color: #ae81ff }
+/* LiteralNumberHex */ .chchroma .chmh { color: #ae81ff }
+/* LiteralNumberInteger */ .chchroma .chmi { color: #ae81ff }
+/* LiteralNumberIntegerLong */ .chchroma .chil { color: #ae81ff }
+/* LiteralNumberOct */ .chchroma .chmo { color: #ae81ff }
+/* Operator */ .chchroma .cho { color: #f92672 }
+/* OperatorWord */ .chchroma .chow { color: #f92672 }
+/* OperatorReserved */ .chchroma .chor { color: #f92672 }
+/* Comment */ .chchroma .chc { color: #75715e }
+/* CommentHashbang */ .chchroma .chch { color: #75715e }
+/* CommentMultiline */ .chchroma .chcm { color: #75715e }
+/* CommentSingle */ .chchroma .chc1 { color: #75715e }
+/* CommentSpecial */ .chchroma .chcs { color: #75715e }
+/* CommentPreproc */ .chchroma .chcp { color: #75715e }
+/* CommentPreprocFile */ .chchroma .chcpf { color: #75715e }
+/* GenericDeleted */ .chchroma .chgd { color: #f92672 }
+/* GenericEmph */ .chchroma .chge { font-style: italic }
+/* GenericInserted */ .chchroma .chgi { color: #a6e22e }
+/* GenericStrong */ .chchroma .chgs { font-weight: bold }
+/* GenericSubheading */ .chchroma .chgu { color: #75715e }
