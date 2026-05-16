@@ -93,6 +93,8 @@ func (*EnvironmentBlock) BlockKind() string { return "environment" }
 type DisplayMath struct {
 	TeX      string `json:"tex"`
 	Label    string `json:"label,omitempty"`
+	Numbered bool   `json:"numbered,omitempty"`
+	NoNumber bool   `json:"noNumber,omitempty"`
 	Number   string `json:"number,omitempty"`
 	AnchorID string `json:"anchorId,omitempty"`
 }

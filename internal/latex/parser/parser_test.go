@@ -840,8 +840,143 @@ After.`, nil, "main.tex", ".")
 		t.Fatalf("expected paragraph, display math, paragraph; got %#v", doc.Children)
 	}
 	math, ok := doc.Children[1].(*ast.DisplayMath)
-	if !ok || math.TeX != "x + y" {
+	if !ok || math.TeX != "x + y" || !math.NoNumber {
 		t.Fatalf("display math parsed incorrectly: %#v", doc.Children[1])
+	}
+}
+
+func TestDisplayMathDollarBlockPreservesMathCommands(t *testing.T) {
+	doc, err := Parse(`Before.
+
+$$
+\forall{i,j\in X}, i>j \Rightarrow y \quad z
+$$
+
+After.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("display math produced warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 3 {
+		t.Fatalf("expected paragraph, display math, paragraph; got %#v", doc.Children)
+	}
+	math, ok := doc.Children[1].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("dollar display math parsed as %T", doc.Children[1])
+	}
+	if !math.NoNumber {
+		t.Fatalf("dollar display math should be unnumbered: %#v", math)
+	}
+	if !strings.Contains(math.TeX, `\forall{i,j\in X}`) ||
+		!strings.Contains(math.TeX, `\Rightarrow y \quad z`) {
+		t.Fatalf("display math TeX was not preserved: %q", math.TeX)
+	}
+}
+
+func TestDisplayMathDollarBlockInsideTextFlow(t *testing.T) {
+	doc, err := Parse(`Before.
+$$
+\forall{x\in X}
+$$
+After.`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("display math produced warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 3 {
+		t.Fatalf("expected paragraph, display math, paragraph; got %#v", doc.Children)
+	}
+	if _, ok := doc.Children[1].(*ast.DisplayMath); !ok {
+		t.Fatalf("dollar display math parsed as %T", doc.Children[1])
+	}
+}
+
+func TestDisplayMathDollarBlockAfterChineseParagraphIsUnnumbered(t *testing.T) {
+	doc, err := Parse(`基于这些设置，我们想要证明的内容可以写作：
+
+$$
+\forall{i,j\in \mathrm{2ast}}, i>j \Rightarrow y
+$$
+
+在正式证明之前继续正文。`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("display math produced warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 3 {
+		t.Fatalf("expected paragraph, display math, paragraph; got %#v", doc.Children)
+	}
+	math, ok := doc.Children[1].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("dollar display math parsed as %T", doc.Children[1])
+	}
+	if !math.NoNumber {
+		t.Fatalf("dollar display math should be unnumbered: %#v", math)
+	}
+}
+
+func TestAlignedEnvironmentIsPreservedAsDisplayMath(t *testing.T) {
+	doc, err := Parse(`\begin{aligned}
+\forall x \in X &\Rightarrow x \quad y
+\end{aligned}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Fatalf("math environment produced warnings: %#v", doc.Warnings)
+	}
+	if len(doc.Children) != 1 {
+		t.Fatalf("expected one display math block, got %#v", doc.Children)
+	}
+	math, ok := doc.Children[0].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("aligned environment was not display math: %#v", doc.Children[0])
+	}
+	if !strings.Contains(math.TeX, `\begin{aligned}`) ||
+		!strings.Contains(math.TeX, `\forall x \in X`) ||
+		!strings.Contains(math.TeX, `\Rightarrow x \quad y`) {
+		t.Fatalf("aligned TeX was not preserved: %q", math.TeX)
+	}
+	if !math.NoNumber {
+		t.Fatalf("aligned fallback display math should be unnumbered: %#v", math)
+	}
+}
+
+func TestStarredEquationIsUnnumbered(t *testing.T) {
+	doc, err := Parse(`\begin{equation*}
+x + y
+\end{equation*}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	math, ok := doc.Children[0].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("equation* parsed as %T", doc.Children[0])
+	}
+	if !math.NoNumber {
+		t.Fatalf("equation* should be unnumbered: %#v", math)
+	}
+}
+
+func TestEquationIsNumbered(t *testing.T) {
+	doc, err := Parse(`\begin{equation}
+x + y
+\end{equation}`, nil, "main.tex", ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	math, ok := doc.Children[0].(*ast.DisplayMath)
+	if !ok {
+		t.Fatalf("equation parsed as %T", doc.Children[0])
+	}
+	if !math.Numbered || math.NoNumber {
+		t.Fatalf("equation should be numbered: %#v", math)
 	}
 }
 

@@ -8,20 +8,20 @@ import (
 	"strings"
 
 	"MetaBlog/internal/latex/ast"
-	"MetaBlog/internal/latex/blocks"
+	latexblocks "MetaBlog/internal/latex/blocks"
 	"MetaBlog/internal/latex/lexer"
 )
 
 type Parser struct {
 	text     string
-	complex  map[string]*blocks.ComplexBlock
+	complex  map[string]*latexblocks.ComplexBlock
 	doc      *ast.Document
 	warnings []string
 	instCode map[string]int
 	instInfo map[string]int
 }
 
-func Parse(text string, complex map[string]*blocks.ComplexBlock, inputFile, root string) (*ast.Document, error) {
+func Parse(text string, complex map[string]*latexblocks.ComplexBlock, inputFile, root string) (*ast.Document, error) {
 	doc := &ast.Document{
 		InputFile:  inputFile,
 		SourceRoot: root,
@@ -216,10 +216,6 @@ func readRequiredArgs(s string, i, count int) ([]string, int, bool) {
 		i = end
 	}
 	return args, i, true
-}
-
-func isCommandAt(s string, i int, cmd string) bool {
-	return lexer.IsCommandAt(s, i, cmd)
 }
 
 func (p *Parser) parseSectionedBlocks(s string) []ast.Block {
@@ -656,8 +652,15 @@ func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
 	case "equation", "equation*", "align", "align*":
 		inner := stripEnvironmentShell(raw, env)
 		return &ast.DisplayMath{
-			TeX:   strings.TrimSpace(removeLabelCommands(inner)),
-			Label: firstCommandArg(inner, "label"),
+			TeX:      strings.TrimSpace(removeLabelCommands(inner)),
+			Label:    firstCommandArg(inner, "label"),
+			Numbered: !strings.HasSuffix(env, "*"),
+			NoNumber: strings.HasSuffix(env, "*"),
+		}, true
+	case "aligned", "aligned*", "alignedat", "alignedat*", "gathered", "split", "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix":
+		return &ast.DisplayMath{
+			TeX:      strings.TrimSpace(raw),
+			NoNumber: true,
 		}, true
 	case "enumerate", "itemize", "description":
 		return bp.parser.parseList(stripEnvironmentShell(raw, env), env), true
@@ -680,6 +683,15 @@ func (bp *blockParser) readEnvironmentBlock() (ast.Block, bool) {
 }
 
 func (bp *blockParser) readDisplayMathBlock() (ast.Block, bool) {
+	if strings.HasPrefix(bp.raw[bp.pos:], "$$") {
+		start := bp.pos + len("$$")
+		end := findDisplayDollarEnd(bp.raw, start)
+		if end < 0 {
+			return nil, false
+		}
+		bp.pos = end + len("$$")
+		return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end]), NoNumber: true}, true
+	}
 	if !bp.commandAt("[") {
 		return nil, false
 	}
@@ -689,7 +701,7 @@ func (bp *blockParser) readDisplayMathBlock() (ast.Block, bool) {
 		return nil, false
 	}
 	bp.pos = end + len(`\]`)
-	return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end])}, true
+	return &ast.DisplayMath{TeX: strings.TrimSpace(bp.raw[start:end]), NoNumber: true}, true
 }
 
 func (bp *blockParser) readBibliographyBlock() (ast.Block, bool) {
@@ -782,6 +794,8 @@ func (bp *blockParser) isBlockBoundaryToken(tok lexer.Token, paragraphStart int)
 	switch tok.Kind {
 	case lexer.Raw, lexer.LBrace:
 		return tok.Kind == lexer.Raw || isBlockStyledGroupCandidate(bp.raw, paragraphStart, tok.Start)
+	case lexer.Dollar:
+		return strings.HasPrefix(bp.raw[tok.Start:], "$$")
 	case lexer.Command:
 		switch tok.Value {
 		case "begin", "[", "bibliographystyle", "bibliography", "appendices", "section", "subsection", "subsubsection", "subsubsubsection":
@@ -2269,15 +2283,6 @@ func sectionLevel(cmd string) int {
 	}
 }
 
-func isSectionCommandValue(cmd string) bool {
-	switch cmd {
-	case "section", "subsection", "subsubsection", "subsubsubsection":
-		return true
-	default:
-		return false
-	}
-}
-
 type span struct{ start, end int }
 
 func extractCommand(s, cmd string) (string, span, bool) {
@@ -2287,24 +2292,6 @@ func extractCommand(s, cmd string) (string, span, bool) {
 	}
 	arg, end, ok := readOneCommandArg(s, idx, cmd)
 	return arg, span{start: idx, end: end}, ok
-}
-
-func extractEnvironment(s, env string) (string, span, bool) {
-	begin := `\begin{` + env + `}`
-	idx := strings.Index(s, begin)
-	if idx < 0 {
-		return "", span{}, false
-	}
-	end, ok := findEnvironmentEnd(s, idx, env)
-	if !ok {
-		return "", span{}, false
-	}
-	raw := s[idx:end]
-	return stripEnvironmentShell(raw, env), span{start: idx, end: end}, true
-}
-
-func readCommandArgAt(s string, idx int, cmd string) (string, int, bool) {
-	return readOneCommandArg(s, idx, cmd)
 }
 
 func readOneCommandArg(s string, idx int, cmd string) (string, int, bool) {
@@ -2331,14 +2318,6 @@ func firstCommandArg(s, cmd string) string {
 		return ""
 	}
 	return strings.TrimSpace(arg)
-}
-
-func firstOptionalArgBeforeCommand(s, cmd string) string {
-	idx := lexer.FindCommand(s, 0, cmd)
-	if idx < 0 {
-		return ""
-	}
-	return firstOptionalArgAt(s, idx, cmd)
 }
 
 func firstOptionalArgAt(s string, idx int, cmd string) string {

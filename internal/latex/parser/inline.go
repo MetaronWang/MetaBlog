@@ -493,6 +493,19 @@ func findInlineDollarEnd(s string, start int) int {
 	return -1
 }
 
+func findDisplayDollarEnd(s string, start int) int {
+	for i := start; i < len(s)-1; i++ {
+		if s[i] == '\\' {
+			i++
+			continue
+		}
+		if s[i] == '$' && s[i+1] == '$' {
+			return i
+		}
+	}
+	return -1
+}
+
 func isEscapedAt(s string, idx int) bool {
 	count := 0
 	for i := idx - 1; i >= 0 && s[i] == '\\'; i-- {
@@ -501,21 +514,12 @@ func isEscapedAt(s string, idx int) bool {
 	return count%2 == 1
 }
 
-func parseInlineGroup(s string) []ast.Inline {
-	return ParseTextArgument(s)
-}
-
 type textDeclarations struct {
 	Style           *ast.Styled
 	Rest            string
 	Align           string
 	HasStyle        bool
 	HasDeclarations bool
-}
-
-func readGroupStyleDeclarations(s string) (*ast.Styled, string, bool) {
-	decl := readTextDeclarations(s)
-	return decl.Style, decl.Rest, decl.HasStyle
 }
 
 func readTextDeclarations(s string) textDeclarations {

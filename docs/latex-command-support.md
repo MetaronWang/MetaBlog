@@ -35,7 +35,7 @@ MetaBlog 对 LaTeX 的支持分为三类：
 | 图片 | `figure`、`figure*`、`\includegraphics`、`\subfloat` | 支持。 |
 | 表格 | `table`、`table*`、`tabular`、`tabularx` | table 外壳手写解析，tabular 主体 LaTeXML。 |
 | 算法 | `algorithm`、`algorithm*` | LaTeXML 托管。 |
-| 公式 | `$...$`、`\(...\)`、`\[...\]`、`equation`、`align` | 支持边界、编号和 KaTeX 渲染。 |
+| 公式 | `$...$`、`\(...\)`、`\[...\]`、`$$...$$`、`equation`、`align`、`aligned` 等 | 支持边界、编号和 KaTeX 渲染。 |
 | 文本样式 | 粗体、斜体、颜色、字号、对齐声明等 | 支持常见命令。 |
 | 链接 | `\url`、`\href` | 支持，危险协议降级。 |
 | 原样文本 | `verbatim`、`lstlisting`、`minted`、`\verb` | 支持为代码文本框。 |
@@ -529,6 +529,10 @@ $a+b$
 a+b
 \]
 
+$$
+a+b
+$$
+
 \begin{equation}
 a+b
 \end{equation}
@@ -536,16 +540,22 @@ a+b
 \begin{align}
 a &= b + c
 \end{align}
+
+\begin{aligned}
+a &\Rightarrow b
+\end{aligned}
 ```
 
 支持：
 
 1. `equation` / `equation*`
 2. `align` / `align*`
-3. `\label{...}`。
-4. `\ref{...}`。
+3. `aligned` / `aligned*`、`alignedat` / `alignedat*`、`gathered`、`split` 和常见矩阵环境。
+4. `\label{...}`。
+5. `\ref{...}`。
 
-带星号环境不编号。
+`\[...\]`、`$$...$$` 和带星号环境不编号；`equation` / `align` 默认编号。
+数学环境内部内容不会按普通文本命令解析；`\forall`、`\in`、`\Rightarrow`、`\quad` 等命令会原样保留并交给 KaTeX。
 
 ### 13.3 文本中的数学字体命令
 

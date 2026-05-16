@@ -111,6 +111,27 @@ func TestFourthLevelSectionRendersAsH5(t *testing.T) {
 	}
 }
 
+func TestUnnumberedDisplayMathDoesNotConsumeEquationNumber(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.DisplayMath{TeX: "x + y", NoNumber: true},
+			&ast.DisplayMath{TeX: "a + b", Numbered: true},
+		},
+	}
+
+	got := Render(doc)
+	if strings.Contains(got, `<span class="equation-number">(2)</span>`) {
+		t.Fatalf("unnumbered display math consumed equation number:\n%s", got)
+	}
+	if !strings.Contains(got, `<span class="equation-number">(1)</span>`) {
+		t.Fatalf("numbered display math did not start at 1:\n%s", got)
+	}
+	if strings.Count(got, `class="equation-number"`) != 1 {
+		t.Fatalf("expected exactly one equation number:\n%s", got)
+	}
+}
+
 func TestRenderWithOptionsIncludesIcon(t *testing.T) {
 	doc := &ast.Document{
 		Title: []ast.Inline{&ast.Text{Value: "Test"}},

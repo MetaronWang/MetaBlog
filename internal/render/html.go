@@ -324,6 +324,14 @@ func (r *Renderer) number(doc *ast.Document) {
 					walkTableContent(sub.Blocks)
 				}
 			case *ast.DisplayMath:
+				if n.NoNumber || !n.Numbered {
+					n.Number = ""
+					n.AnchorID = anchor(n.Label, "equation")
+					if n.Label != "" {
+						r.labels[n.Label] = labelTarget{AnchorID: n.AnchorID}
+					}
+					continue
+				}
 				eqNo++
 				n.Number = intString(eqNo)
 				n.AnchorID = anchor(n.Label, "equation-"+n.Number)
@@ -360,7 +368,7 @@ func (r *Renderer) number(doc *ast.Document) {
 	}
 	walkTableContent = func(blocks []ast.Block) {
 		for _, block := range blocks {
-			if complex, ok := block.(*ast.ComplexHTML); ok && isTabularComplex(complex) {
+			if complexBlock, ok := block.(*ast.ComplexHTML); ok && isTabularComplex(complexBlock) {
 				continue
 			}
 			walk([]ast.Block{block})
@@ -1008,7 +1016,7 @@ func (r *Renderer) refText(key string) string {
 	return key
 }
 
-var rawRefRE = regexp.MustCompile(`\\(?:eq)?ref\s*\{([^}]*)\}`)
+var rawRefRE = regexp.MustCompile(`\\(?:eq)?ref\s*\{([^}]*)}`)
 var lateXMLMissingRefRE = regexp.MustCompile(`(?s)<span class="ltx_ref ltx_missing_label[^"]*">LABEL:[^<]*</span>`)
 var lateXMLTableCaptionTagRE = regexp.MustCompile(`(?is)<span class="ltx_tag ltx_tag_table">Table[^<]*</span>`)
 var lateXMLAlgorithmCaptionTagRE = regexp.MustCompile(`(?is)<span class="ltx_tag ltx_tag_float">\s*(?:<span class="[^"]*">)?Algorithm[^<]*(?:</span>)?\s*</span>`)
