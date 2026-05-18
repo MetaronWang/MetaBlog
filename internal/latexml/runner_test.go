@@ -69,6 +69,48 @@ func TestSanitizeFragmentPreservesSafeColorStyles(t *testing.T) {
 	}
 }
 
+func TestSanitizeFragmentStripsAlgorithmIndentAdornments(t *testing.T) {
+	in := `<figure class="ltx_algorithm"><div class="ltx_listing">` +
+		`<div class="ltx_listingline"><span class="ltx_tag ltx_tag_listingline"><span class="ltx_text">5</span></span>` +
+		`<span class="ltx_text">&nbsp;&nbsp;</span><span class="ltx_rule">&nbsp;</span><span class="ltx_text">&nbsp;&nbsp;&nbsp;</span>` +
+		`<span class="ltx_text">Find a long line that may wrap</span></div>` +
+		`</div></figure>`
+
+	got := sanitizeFragment(in)
+	for _, want := range []string{
+		`metablog-algorithm-numbered metablog-algorithm-depth-1`,
+		`<span class="ltx_tag ltx_tag_listingline"><span class="ltx_text">5</span></span><span class="ltx_text">Find a long line that may wrap</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized algorithm line missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `ltx_rule`) || strings.Contains(got, `&nbsp;&nbsp;&nbsp;`) {
+		t.Fatalf("algorithm indentation adornments were preserved:\n%s", got)
+	}
+}
+
+func TestSanitizeFragmentWrapsAlgorithmIOAsTwoColumns(t *testing.T) {
+	in := `<figure class="ltx_algorithm"><div class="ltx_listing">` +
+		`<div class="ltx_listingline"><span class="ltx_text"><span class="ltx_text ltx_font_bold">Input:</span> Problem ` +
+		`<span class="math inline" data-tex="m">\(m\)</span>.</span></div>` +
+		`</div></figure>`
+
+	got := sanitizeFragment(in)
+	for _, want := range []string{
+		`metablog-algorithm-io`,
+		`<span class="metablog-algorithm-io-label">Input:</span>`,
+		`<span class="metablog-algorithm-io-content"><span class="ltx_text"> Problem <span class="math inline" data-tex="m">\(m\)</span>.</span></span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized algorithm IO missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `ltx_font_bold">Input:`) {
+		t.Fatalf("original IO label was preserved inside content:\n%s", got)
+	}
+}
+
 func TestCacheReadRequiresExactRawTeXMatch(t *testing.T) {
 	bin := fakeLateXMLBin(t)
 	runner := Runner{Bin: bin, CacheDir: t.TempDir()}

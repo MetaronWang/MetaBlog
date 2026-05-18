@@ -980,7 +980,13 @@ figcaption {
   color: var(--muted);
 }
 .complex-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  contain: layout paint;
   margin: 24px 0;
 }
 .metablog-latexml-fragment,
@@ -1026,6 +1032,16 @@ figcaption {
   font-weight: 500;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .ltx_listing {
+  --metablog-algorithm-gutter: 2.4rem;
+  --metablog-algorithm-indent-step: 1rem;
+  --metablog-algorithm-rule-gap: 0.25rem;
+  --metablog-algorithm-rule-offset: 0.5em;
+  --metablog-algorithm-rule-1: calc(var(--metablog-algorithm-gutter) - var(--metablog-algorithm-rule-gap) + var(--metablog-algorithm-rule-offset));
+  --metablog-algorithm-rule-2: calc(var(--metablog-algorithm-rule-1) + var(--metablog-algorithm-indent-step));
+  --metablog-algorithm-rule-3: calc(var(--metablog-algorithm-rule-2) + var(--metablog-algorithm-indent-step));
+  --metablog-algorithm-rule-4: calc(var(--metablog-algorithm-rule-3) + var(--metablog-algorithm-indent-step));
+  --metablog-algorithm-rule-5: calc(var(--metablog-algorithm-rule-4) + var(--metablog-algorithm-indent-step));
+  --metablog-algorithm-rule-6: calc(var(--metablog-algorithm-rule-5) + var(--metablog-algorithm-indent-step));
   width: 100%;
   min-width: 0;
   margin: 0;
@@ -1036,9 +1052,10 @@ figcaption {
   overflow-wrap: anywhere;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .ltx_listingline {
+  --metablog-algorithm-depth: 0;
   display: block;
   min-height: 1.45em;
-  padding-left: 2.4rem;
+  padding-left: calc(var(--metablog-algorithm-gutter) + var(--metablog-algorithm-depth) * var(--metablog-algorithm-indent-step));
   position: relative;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1064,32 +1081,49 @@ figcaption {
   background-size: 1px calc(100% + 2px);
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-1 {
+  --metablog-algorithm-depth: 1;
   background-image: linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-2 {
+  --metablog-algorithm-depth: 2;
   background-image: linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px, 4.88rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-3 {
+  --metablog-algorithm-depth: 3;
   background-image: linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px, 4.88rem -1px, 6.38rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px, var(--metablog-algorithm-rule-3) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-4 {
+  --metablog-algorithm-depth: 4;
   background-image: linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px, 4.88rem -1px, 6.38rem -1px, 7.88rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px, var(--metablog-algorithm-rule-3) -1px, var(--metablog-algorithm-rule-4) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-5 {
+  --metablog-algorithm-depth: 5;
   background-image: linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px, 4.88rem -1px, 6.38rem -1px, 7.88rem -1px, 9.38rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px, var(--metablog-algorithm-rule-3) -1px, var(--metablog-algorithm-rule-4) -1px, var(--metablog-algorithm-rule-5) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-6 {
+  --metablog-algorithm-depth: 6;
   background-image: linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted)), linear-gradient(var(--muted), var(--muted));
-  background-position: 3.38rem -1px, 4.88rem -1px, 6.38rem -1px, 7.88rem -1px, 9.38rem -1px, 10.88rem -1px;
+  background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px, var(--metablog-algorithm-rule-3) -1px, var(--metablog-algorithm-rule-4) -1px, var(--metablog-algorithm-rule-5) -1px, var(--metablog-algorithm-rule-6) -1px;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-io {
-  padding-left: 6.2rem;
-  text-indent: -3.8rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding-left: var(--metablog-algorithm-gutter);
+}
+.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-io-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-io-content {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .ltx_tag_listingline {
   position: absolute;
@@ -1102,7 +1136,7 @@ figcaption {
   text-align: right;
 }
 .metablog-latexml-fragment figure.ltx_algorithm .ltx_rule {
-  display: inline-block;
+  display: none;
   width: 0.75rem;
   margin: 0 0.25rem 0 0.1rem;
   border-left: 1px solid transparent;
@@ -1268,6 +1302,22 @@ figcaption {
 .katex,
 .katex-display {
   font-size: 1.02em;
+}
+.katex .katex-mathml {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  max-width: 1px;
+  max-height: 1px;
+  overflow: hidden;
+  contain: strict;
+  clip: rect(1px, 1px, 1px, 1px);
+  clip-path: inset(50%);
+}
+.katex .katex-mathml * {
+  max-width: 1px;
+  max-height: 1px;
+  overflow: hidden;
 }
 .katex-display {
   overflow-x: auto;

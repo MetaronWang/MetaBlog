@@ -79,6 +79,56 @@ func TestDefaultSiteLayoutSupportsStickyFooter(t *testing.T) {
 	}
 }
 
+func TestDefaultCSSContainsMobileOverflowIsolation(t *testing.T) {
+	for _, want := range []string{
+		`.complex-wrapper {`,
+		`width: 100%;`,
+		`overflow-x: auto;`,
+		`overscroll-behavior-x: contain;`,
+		`contain: layout paint;`,
+		`.katex .katex-mathml {`,
+		`width: 1px;`,
+		`height: 1px;`,
+		`overflow: hidden;`,
+		`contain: strict;`,
+		`clip-path: inset(50%);`,
+	} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Fatalf("default CSS missing mobile overflow isolation rule %q", want)
+		}
+	}
+}
+
+func TestDefaultCSSKeepsWrappedAlgorithmLinesIndented(t *testing.T) {
+	for _, want := range []string{
+		`--metablog-algorithm-gutter: 2.4rem;`,
+		`--metablog-algorithm-indent-step: 1rem;`,
+		`--metablog-algorithm-rule-gap: 0.25rem;`,
+		`--metablog-algorithm-rule-offset: 0.5em;`,
+		`--metablog-algorithm-rule-1: calc(var(--metablog-algorithm-gutter) - var(--metablog-algorithm-rule-gap) + var(--metablog-algorithm-rule-offset));`,
+		`--metablog-algorithm-rule-6: calc(var(--metablog-algorithm-rule-5) + var(--metablog-algorithm-indent-step));`,
+		`--metablog-algorithm-depth: 0;`,
+		`padding-left: calc(var(--metablog-algorithm-gutter) + var(--metablog-algorithm-depth) * var(--metablog-algorithm-indent-step));`,
+		`display: flex;`,
+		`align-items: flex-start;`,
+		`padding-left: var(--metablog-algorithm-gutter);`,
+		`.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-io-label {`,
+		`.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-io-content {`,
+		`background-position: var(--metablog-algorithm-rule-1) -1px;`,
+		`background-position: var(--metablog-algorithm-rule-1) -1px, var(--metablog-algorithm-rule-2) -1px, var(--metablog-algorithm-rule-3) -1px, var(--metablog-algorithm-rule-4) -1px, var(--metablog-algorithm-rule-5) -1px, var(--metablog-algorithm-rule-6) -1px;`,
+		`.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-1 {`,
+		`--metablog-algorithm-depth: 1;`,
+		`.metablog-latexml-fragment figure.ltx_algorithm .metablog-algorithm-depth-6 {`,
+		`--metablog-algorithm-depth: 6;`,
+		`.metablog-latexml-fragment figure.ltx_algorithm .ltx_rule {`,
+		`display: none;`,
+	} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Fatalf("default CSS missing algorithm wrap indentation rule %q", want)
+		}
+	}
+}
+
 func TestDefaultFontsCSSIncludesSourceCodePro(t *testing.T) {
 	for _, want := range []string{
 		`font-family: "Source Code Pro"`,

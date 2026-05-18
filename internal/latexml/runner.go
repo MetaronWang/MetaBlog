@@ -738,6 +738,8 @@ var (
 	listingLineRE          = regexp.MustCompile(`(?is)<div\s+class="([^"]*\bltx_listingline\b[^"]*)"([^>]*)>(.*?)</div>`)
 	listingLineAdornmentRE = regexp.MustCompile(`(?is)<span\s+class="[^"]*\b(?:ltx_tag_listingline|ltx_rule)\b[^"]*"[^>]*>.*?</span>`)
 	listingRuleRE          = regexp.MustCompile(`(?is)<span\s+class="[^"]*\bltx_rule\b[^"]*"[^>]*>.*?</span>`)
+	algorithmIOLabelRE     = regexp.MustCompile(`(?is)<span\b[^>]*\bltx_font_bold\b[^>]*>\s*(Input:|Output:)\s*</span>`)
+	spanTagRE              = regexp.MustCompile(`(?is)<span\b[^>]*>|</span>`)
 	htmlTagRE              = regexp.MustCompile(`(?is)<[^>]+>`)
 )
 
@@ -767,7 +769,9 @@ func annotateAlgorithmLines(s string) string {
 			}
 			if strings.HasPrefix(lineText, "input:") || strings.HasPrefix(lineText, "output:") {
 				className += " metablog-algorithm-io"
+				body = wrapAlgorithmIO(body)
 			}
+			body = stripAlgorithmLineIndentation(body)
 			return `<div class="` + className + `"` + attrs + `>` + body + `</div>`
 		})
 	})
@@ -778,6 +782,82 @@ func algorithmLineText(body string) string {
 	text := html.UnescapeString(htmlTagRE.ReplaceAllString(body, ""))
 	text = strings.ReplaceAll(text, "\u00a0", " ")
 	return strings.ToLower(strings.TrimSpace(text))
+}
+
+func stripAlgorithmLineIndentation(body string) string {
+	prefix := ""
+	rest := strings.TrimLeftFunc(body, isHTMLSpaceRune)
+	if strings.HasPrefix(strings.ToLower(rest), `<span`) && spanHasClass(rest, "ltx_tag_listingline") {
+		if end, ok := consumeLeadingSpan(rest); ok {
+			prefix = rest[:end]
+			rest = rest[end:]
+		}
+	}
+	for {
+		rest = strings.TrimLeftFunc(rest, isHTMLSpaceRune)
+		if !strings.HasPrefix(strings.ToLower(rest), `<span`) {
+			break
+		}
+		end, ok := consumeLeadingSpan(rest)
+		if !ok {
+			break
+		}
+		span := rest[:end]
+		switch {
+		case spanHasClass(span, "ltx_rule"):
+			rest = rest[end:]
+		case spanHasClass(span, "ltx_text") && spanTextIsWhitespace(span):
+			rest = rest[end:]
+		default:
+			return prefix + rest
+		}
+	}
+	return prefix + rest
+}
+
+func wrapAlgorithmIO(body string) string {
+	m := algorithmIOLabelRE.FindStringSubmatchIndex(body)
+	if len(m) == 0 {
+		return body
+	}
+	label := strings.TrimSpace(body[m[2]:m[3]])
+	content := body[:m[0]] + body[m[1]:]
+	content = stripAlgorithmLineIndentation(content)
+	return `<span class="metablog-algorithm-io-label">` + html.EscapeString(label) + `</span>` +
+		`<span class="metablog-algorithm-io-content">` + content + `</span>`
+}
+
+func consumeLeadingSpan(s string) (int, bool) {
+	matches := spanTagRE.FindAllStringIndex(s, -1)
+	if len(matches) == 0 || matches[0][0] != 0 {
+		return 0, false
+	}
+	depth := 0
+	for _, m := range matches {
+		tag := strings.ToLower(s[m[0]:m[1]])
+		if strings.HasPrefix(tag, "</span") {
+			depth--
+			if depth == 0 {
+				return m[1], true
+			}
+			continue
+		}
+		depth++
+	}
+	return 0, false
+}
+
+func spanHasClass(span, className string) bool {
+	return strings.Contains(strings.ToLower(span), className)
+}
+
+func spanTextIsWhitespace(span string) bool {
+	text := html.UnescapeString(htmlTagRE.ReplaceAllString(span, ""))
+	return strings.TrimLeftFunc(text, isHTMLSpaceRune) == ""
+}
+
+func isHTMLSpaceRune(r rune) bool {
+	return r == '\u00a0' || r == '\ufeff' || strings.ContainsRune(" \t\r\n\f", r)
 }
 
 func replaceMathTag(tag string) string {
