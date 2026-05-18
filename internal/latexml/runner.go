@@ -729,7 +729,7 @@ func repairAlignedMathFromRaw(htmlText, rawTeX string) string {
 		if raw == "" {
 			return rendered
 		}
-		return `<span class="math inline">\(` + html.EscapeString(raw) + `\)</span>`
+		return inlineMathHTML(raw)
 	})
 }
 
@@ -788,9 +788,19 @@ func replaceMathTag(tag string) string {
 	}
 	tex = normalizeAltTeX(tex)
 	if attrs["display"] == "inline" || attrs["display"] == "" {
-		return `<span class="math inline">\(` + html.EscapeString(tex) + `\)</span>`
+		return inlineMathHTML(tex)
 	}
-	return `<div class="math display">\[` + html.EscapeString(tex) + `\]</div>`
+	return displayMathHTML(tex)
+}
+
+func inlineMathHTML(tex string) string {
+	escaped := html.EscapeString(tex)
+	return `<span class="math inline" data-tex="` + escaped + `">\(` + escaped + `\)</span>`
+}
+
+func displayMathHTML(tex string) string {
+	escaped := html.EscapeString(tex)
+	return `<div class="math display"><span class="math-render-target" data-tex="` + escaped + `">\[` + escaped + `\]</span></div>`
 }
 
 func parseAttrs(tag string) map[string]string {

@@ -27,6 +27,26 @@ CAOP & \(\begin{aligned} [7, 33, 14, 0.44, T]\\ [1, 54, 24, 0.57, T]\\ [2, 31, 4
 	if strings.Contains(got, `\begin{aligned} \\`) {
 		t.Fatalf("leading empty aligned row was preserved: %s", got)
 	}
+	if !strings.Contains(got, `class="math inline" data-tex="\begin{aligned}`) {
+		t.Fatalf("repaired aligned math did not use scoped KaTeX target: %s", got)
+	}
+}
+
+func TestSanitizeFragmentConvertsMathTagsToScopedKaTeXTargets(t *testing.T) {
+	in := `<article><math display="inline" alttext="x+y"></math><math display="block" alttext="a+b"></math></article>`
+
+	got := sanitizeFragment(in)
+	for _, want := range []string{
+		`<span class="math inline" data-tex="x+y">\(x+y\)</span>`,
+		`<div class="math display"><span class="math-render-target" data-tex="a+b">\[a+b\]</span></div>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized LaTeXML math missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "<math") {
+		t.Fatalf("MathML tag was preserved: %s", got)
+	}
 }
 
 func TestSanitizeFragmentPreservesSafeColorStyles(t *testing.T) {

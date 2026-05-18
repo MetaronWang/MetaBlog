@@ -68,24 +68,9 @@ func RenderWithOptions(doc *ast.Document, opts Options) string {
 		b.WriteString(`">`)
 		b.WriteByte('\n')
 	}
-	b.WriteString(`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  renderMathInElement(document.body, {
-    delimiters: [
-      {left: "\\[", right: "\\]", display: true},
-      {left: "\\(", right: "\\)", display: false},
-      {left: "$", right: "$", display: false}
-    ],
-    throwOnError: false,
-    strict: "ignore",
-    trust: true
-  });
-});
-</script>
-`)
+	if documentHasMath(doc) {
+		b.WriteString(katexAssetsHTML())
+	}
 	b.WriteString("</head>\n<body")
 	if opts.BodyClass != "" {
 		b.WriteString(` class="`)
@@ -148,6 +133,176 @@ func joinURL(prefix, path string) string {
 		return path
 	}
 	return prefix + "/" + path
+}
+
+func katexAssetsHTML() string {
+	return `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  if (!window.katex) return;
+  function displayTarget(node) {
+    for (var i = 0; i < node.children.length; i++) {
+      if (node.children[i].classList && node.children[i].classList.contains("math-render-target")) {
+        return node.children[i];
+      }
+    }
+    return node;
+  }
+  function renderNode(node, displayMode) {
+    var target = displayMode ? displayTarget(node) : node;
+    var tex = normalizeTeX(target.getAttribute("data-tex") || target.textContent || "", displayMode);
+    if (!tex) return;
+    window.katex.render(tex, target, {
+      displayMode: displayMode,
+      throwOnError: false,
+      strict: "ignore",
+      trust: true
+    });
+  }
+  function normalizeTeX(tex, displayMode) {
+    tex = (tex || "").trim();
+    if (displayMode && tex.slice(0, 2) === "\\[" && tex.slice(-2) === "\\]") {
+      return tex.slice(2, -2).trim();
+    }
+    if (!displayMode && tex.slice(0, 2) === "\\(" && tex.slice(-2) === "\\)") {
+      return tex.slice(2, -2).trim();
+    }
+    return tex;
+  }
+  document.querySelectorAll(".math.inline").forEach(function (node) {
+    renderNode(node, false);
+  });
+  document.querySelectorAll(".math.display").forEach(function (node) {
+    renderNode(node, true);
+  });
+});
+</script>
+`
+}
+
+func documentHasMath(doc *ast.Document) bool {
+	if doc == nil {
+		return false
+	}
+	if inlinesHaveMath(doc.Title) || inlinesHaveMath(doc.Keywords) {
+		return true
+	}
+	for _, author := range doc.Authors {
+		if inlinesHaveMath(author.Name) {
+			return true
+		}
+	}
+	for _, inst := range doc.Institutions {
+		if inlinesHaveMath(inst.Info) {
+			return true
+		}
+	}
+	return blocksHaveMath(doc.Abstract) || blocksHaveMath(doc.Children)
+}
+
+func blocksHaveMath(blocks []ast.Block) bool {
+	for _, block := range blocks {
+		switch n := block.(type) {
+		case *ast.DisplayMath:
+			return true
+		case *ast.ComplexHTML:
+			if htmlHasMathClass(n.HTML) {
+				return true
+			}
+		case *ast.RawHTML:
+			if htmlHasMathClass(n.HTML) {
+				return true
+			}
+		case *ast.Section:
+			if inlinesHaveMath(n.Title) || blocksHaveMath(n.Children) {
+				return true
+			}
+		case *ast.Paragraph:
+			if inlinesHaveMath(n.Inlines) {
+				return true
+			}
+		case *ast.StyledBlock:
+			if blocksHaveMath(n.Children) {
+				return true
+			}
+		case *ast.AbstractBlock:
+			if blocksHaveMath(n.Children) {
+				return true
+			}
+		case *ast.KeywordsBlock:
+			if inlinesHaveMath(n.Inlines) {
+				return true
+			}
+		case *ast.EnvironmentBlock:
+			if blocksHaveMath(n.Children) {
+				return true
+			}
+		case *ast.List:
+			for _, item := range n.Items {
+				if inlinesHaveMath(item.Label) || blocksHaveMath(item.Blocks) {
+					return true
+				}
+			}
+		case *ast.Figure:
+			if inlinesHaveMath(n.Caption) {
+				return true
+			}
+			for _, sub := range n.Subfigures {
+				if inlinesHaveMath(sub.Caption) {
+					return true
+				}
+			}
+		case *ast.Table:
+			if inlinesHaveMath(n.Caption) || blocksHaveMath(n.Children) {
+				return true
+			}
+			for _, sub := range n.Subtables {
+				if inlinesHaveMath(sub.Caption) || blocksHaveMath(sub.Blocks) {
+					return true
+				}
+			}
+		case *ast.TCB:
+			if inlinesHaveMath(n.Title) || blocksHaveMath(n.Children) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func htmlHasMathClass(htmlText string) bool {
+	return strings.Contains(htmlText, "math inline") || strings.Contains(htmlText, "math display")
+}
+
+func inlinesHaveMath(inlines []ast.Inline) bool {
+	for _, node := range inlines {
+		switch n := node.(type) {
+		case *ast.InlineMath:
+			return true
+		case *ast.Bold:
+			if inlinesHaveMath(n.Children) {
+				return true
+			}
+		case *ast.Italic:
+			if inlinesHaveMath(n.Children) {
+				return true
+			}
+		case *ast.Styled:
+			if inlinesHaveMath(n.Children) {
+				return true
+			}
+		case *ast.Link:
+			if inlinesHaveMath(n.Children) {
+				return true
+			}
+		case *ast.Footnote:
+			if inlinesHaveMath(n.Children) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *Renderer) renderAuthorMetadata(b *strings.Builder) {
@@ -442,9 +597,11 @@ func (r *Renderer) renderBlocks(b *strings.Builder, blocks []ast.Block) {
 		case *ast.DisplayMath:
 			b.WriteString(`<div id="`)
 			b.WriteString(html.EscapeString(n.AnchorID))
-			b.WriteString(`" class="math display">\[`)
+			b.WriteString(`" class="math display"><span class="math-render-target" data-tex="`)
 			b.WriteString(html.EscapeString(n.TeX))
-			b.WriteString(`\]`)
+			b.WriteString(`">\[`)
+			b.WriteString(html.EscapeString(n.TeX))
+			b.WriteString(`\]</span>`)
 			if n.Number != "" {
 				b.WriteString(`<span class="equation-number">(`)
 				b.WriteString(html.EscapeString(n.Number))
@@ -691,7 +848,9 @@ func (r *Renderer) renderInlines(inlines []ast.Inline) string {
 				b.WriteString(`</span>`)
 			}
 		case *ast.InlineMath:
-			b.WriteString(`<span class="math inline">\(`)
+			b.WriteString(`<span class="math inline" data-tex="`)
+			b.WriteString(html.EscapeString(n.TeX))
+			b.WriteString(`">\(`)
 			b.WriteString(html.EscapeString(n.TeX))
 			b.WriteString(`\)</span>`)
 		case *ast.LineBreak:
@@ -748,7 +907,9 @@ func (r *Renderer) renderTOCInlines(inlines []ast.Inline) string {
 				b.WriteString(`</span>`)
 			}
 		case *ast.InlineMath:
-			b.WriteString(`<span class="math inline">\(`)
+			b.WriteString(`<span class="math inline" data-tex="`)
+			b.WriteString(html.EscapeString(n.TeX))
+			b.WriteString(`">\(`)
 			b.WriteString(html.EscapeString(n.TeX))
 			b.WriteString(`\)</span>`)
 		case *ast.LineBreak:

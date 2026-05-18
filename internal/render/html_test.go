@@ -132,6 +132,90 @@ func TestUnnumberedDisplayMathDoesNotConsumeEquationNumber(t *testing.T) {
 	}
 }
 
+func TestRenderSkipsKaTeXWhenDocumentHasNoMath(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{&ast.Text{Value: "Plain text."}}},
+		},
+	}
+
+	got := Render(doc)
+	for _, unwanted := range []string{
+		`katex.min.css`,
+		`katex.min.js`,
+		`auto-render.min.js`,
+		`renderMathInElement`,
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("non-math document loaded KaTeX asset %q:\n%s", unwanted, got)
+		}
+	}
+}
+
+func TestRenderUsesScopedKaTeXRendererForMath(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Text{Value: "Inline "},
+				&ast.InlineMath{TeX: "x + y"},
+			}},
+			&ast.DisplayMath{TeX: "a + b", Numbered: true},
+		},
+	}
+
+	got := Render(doc)
+	for _, want := range []string{
+		`katex.min.css`,
+		`katex.min.js`,
+		`window.katex.render`,
+		`function normalizeTeX(tex, displayMode)`,
+		`document.querySelectorAll(".math.inline")`,
+		`document.querySelectorAll(".math.display")`,
+		`<span class="math inline" data-tex="x + y">\(x + y\)</span>`,
+		`<span class="math-render-target" data-tex="a + b">\[a + b\]</span><span class="equation-number">(1)</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered math HTML missing %q:\n%s", want, got)
+		}
+	}
+	for _, unwanted := range []string{
+		`auto-render.min.js`,
+		`renderMathInElement`,
+		`{left: "$"`,
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("scoped math renderer still contains %q:\n%s", unwanted, got)
+		}
+	}
+}
+
+func TestRenderLoadsKaTeXForComplexHTMLMath(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.ComplexHTML{HTML: `<div class="metablog-latexml-fragment"><span class="math inline">\(x+y\)</span></div>`},
+		},
+	}
+
+	got := Render(doc)
+	for _, want := range []string{
+		`katex.min.css`,
+		`katex.min.js`,
+		`window.katex.render`,
+		`tex.slice(0, 2) === "\\("`,
+		`<span class="math inline">\(x+y\)</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("complex HTML math did not trigger scoped KaTeX support %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `auto-render.min.js`) || strings.Contains(got, `renderMathInElement`) {
+		t.Fatalf("complex HTML math should not use KaTeX auto-render:\n%s", got)
+	}
+}
+
 func TestRenderWithOptionsIncludesIcon(t *testing.T) {
 	doc := &ast.Document{
 		Title: []ast.Inline{&ast.Text{Value: "Test"}},
