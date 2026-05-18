@@ -171,6 +171,9 @@ func TestRenderUsesScopedKaTeXRendererForMath(t *testing.T) {
 		`katex.min.js`,
 		`window.katex.render`,
 		`function normalizeTeX(tex, displayMode)`,
+		`function mathCopyText(node)`,
+		`document.addEventListener("copy", function (event)`,
+		`event.clipboardData.setData("text/plain", parts.join("\n"))`,
 		`document.querySelectorAll(".math.inline")`,
 		`document.querySelectorAll(".math.display")`,
 		`<span class="math inline" data-tex="x + y">\(x + y\)</span>`,
@@ -213,6 +216,33 @@ func TestRenderLoadsKaTeXForComplexHTMLMath(t *testing.T) {
 	}
 	if strings.Contains(got, `auto-render.min.js`) || strings.Contains(got, `renderMathInElement`) {
 		t.Fatalf("complex HTML math should not use KaTeX auto-render:\n%s", got)
+	}
+}
+
+func TestRenderMathCopyUsesLaTeXSource(t *testing.T) {
+	doc := &ast.Document{
+		Title: []ast.Inline{&ast.Text{Value: "Test"}},
+		Children: []ast.Block{
+			&ast.Paragraph{Inlines: []ast.Inline{
+				&ast.Text{Value: "Inline "},
+				&ast.InlineMath{TeX: `\alpha+\beta`},
+			}},
+			&ast.DisplayMath{TeX: `x^2+y^2`, Numbered: true},
+		},
+	}
+
+	got := Render(doc)
+	for _, want := range []string{
+		`function mathCopyText(node)`,
+		`return displayMode ? "\\[" + tex + "\\]" : "\\(" + tex + "\\)";`,
+		`function replaceMathWithSource(fragment)`,
+		`function rangeIntersectsMath(range)`,
+		`function installMathCopyHandler()`,
+		`event.clipboardData.setData("text/plain", parts.join("\n"))`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("math copy handler missing %q:\n%s", want, got)
+		}
 	}
 }
 

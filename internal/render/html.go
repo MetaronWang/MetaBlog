@@ -170,12 +170,71 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     return tex;
   }
+  function closestMath(node) {
+    for (var cur = node && (node.nodeType === 1 ? node : node.parentElement); cur; cur = cur.parentElement) {
+      if (cur.classList && (cur.classList.contains("math") && (cur.classList.contains("inline") || cur.classList.contains("display")))) {
+        return cur;
+      }
+    }
+    return null;
+  }
+  function mathCopyText(node) {
+    var displayMode = node.classList.contains("display");
+    var target = displayMode ? displayTarget(node) : node;
+    var tex = normalizeTeX(target.getAttribute("data-tex") || node.getAttribute("data-tex") || target.textContent || node.textContent || "", displayMode);
+    if (!tex) return "";
+    return displayMode ? "\\[" + tex + "\\]" : "\\(" + tex + "\\)";
+  }
+  function replaceMathWithSource(fragment) {
+    var nodes = fragment.querySelectorAll ? fragment.querySelectorAll(".math.inline, .math.display") : [];
+    nodes.forEach(function (node) {
+      node.replaceWith(document.createTextNode(mathCopyText(node)));
+    });
+    return nodes.length > 0;
+  }
+  function rangeIntersectsMath(range) {
+    var nodes = document.querySelectorAll(".math.inline, .math.display");
+    for (var i = 0; i < nodes.length; i++) {
+      try {
+        if (range.intersectsNode(nodes[i])) return true;
+      } catch (err) {}
+    }
+    return false;
+  }
+  function rangeCopyText(range) {
+    var enclosing = closestMath(range.commonAncestorContainer);
+    if (enclosing) {
+      return mathCopyText(enclosing);
+    }
+    var fragment = range.cloneContents();
+    replaceMathWithSource(fragment);
+    return fragment.textContent || "";
+  }
+  function installMathCopyHandler() {
+    document.addEventListener("copy", function (event) {
+      var selection = window.getSelection ? window.getSelection() : null;
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !event.clipboardData) return;
+      var hasMath = false;
+      var parts = [];
+      for (var i = 0; i < selection.rangeCount; i++) {
+        var range = selection.getRangeAt(i);
+        if (rangeIntersectsMath(range)) {
+          hasMath = true;
+        }
+        parts.push(rangeCopyText(range));
+      }
+      if (!hasMath) return;
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", parts.join("\n"));
+    });
+  }
   document.querySelectorAll(".math.inline").forEach(function (node) {
     renderNode(node, false);
   });
   document.querySelectorAll(".math.display").forEach(function (node) {
     renderNode(node, true);
   });
+  installMathCopyHandler();
 });
 </script>
 `

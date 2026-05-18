@@ -626,6 +626,8 @@ a &\Rightarrow b
 `\[...\]`、`$$...$$` 和带星号环境不编号；`equation` / `align` 默认编号。
 数学环境内部内容不会按普通文本命令解析；`\forall`、`\in`、`\Rightarrow`、`\quad` 等命令会原样保留并交给 KaTeX。
 
+公式在页面中显示为 KaTeX 渲染结果，但复制时会尽量保留作者写作时的 LaTeX 语义。用户选中公式并复制时，剪贴板中的纯文本会写入公式源码，而不是 KaTeX 渲染后的可见字符；行内公式复制为 `\(...\)`，块级公式复制为 `\[...\]`。只有复制范围包含公式时才会接管复制行为，普通文本复制不受影响。
+
 ### 13.3 文本中的数学字体命令
 
 以下命令如果出现在普通文本中，会被识别为 inline math：
@@ -652,7 +654,7 @@ a &\Rightarrow b
 
 ### 13.4 LaTeXML 数学输出
 
-LaTeXML 复杂块中的 MathML 会根据 `alttext` 还原为 KaTeX 公式。对于 LaTeXML 在表格内 inline `aligned` 公式中丢失首行的问题，MetaBlog 会尝试用原始 LaTeX 片段修复。
+LaTeXML 复杂块中的 MathML 会根据 `alttext` 还原为 KaTeX 公式，并保留公式源码用于复制。对于 LaTeXML 在表格内 inline `aligned` 公式中丢失首行的问题，MetaBlog 会尝试用原始 LaTeX 片段修复。
 
 ## 14. 交叉引用和参考文献
 
